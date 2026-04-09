@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 interface Product {
   id: string;
+  slug?: string;
   name: string;
   price: number;
   originalPrice?: number;
@@ -35,7 +36,7 @@ export default function RecentlyViewed() {
               localStorage.removeItem('recentlyViewed');
               setRecentProducts([]);
             }}
-            className="text-sm text-blue-700 hover:text-blue-800 font-medium whitespace-nowrap"
+            className="text-sm text-stone-700 hover:text-stone-800 font-medium whitespace-nowrap"
           >
             Clear History
           </button>
@@ -45,7 +46,7 @@ export default function RecentlyViewed() {
           {recentProducts.map((product) => (
             <Link
               key={product.id}
-              href={`/product/${product.id}`}
+              href={`/product/${product.slug || product.id}`}
               className="group bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-lg transition-shadow"
             >
               <div className="aspect-square bg-gray-100 overflow-hidden">

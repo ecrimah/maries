@@ -18,6 +18,11 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     const [productName, setProductName] = useState(initialData?.name || '');
     const [categoryId, setCategoryId] = useState(initialData?.category_id || '');
     const [price, setPrice] = useState(initialData?.price || '');
+    const [salePrice, setSalePrice] = useState(
+        initialData?.sale_price != null && initialData?.sale_price !== ''
+            ? String(initialData.sale_price)
+            : ''
+    );
     const [comparePrice, setComparePrice] = useState(initialData?.compare_at_price || '');
     const [sku, setSku] = useState(initialData?.sku || '');
     const [stock, setStock] = useState(initialData?.quantity || '');
@@ -31,7 +36,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
     // Auto-generate SKU function
     const generateSku = () => {
-        const prefix = 'MMS'; // MultiMey Supplies
+        const prefix = 'MH'; // Maries Hair
         const timestamp = Date.now().toString(36).toUpperCase().slice(-4);
         const random = Math.random().toString(36).substring(2, 6).toUpperCase();
         return `${prefix}-${timestamp}-${random}`;
@@ -96,14 +101,27 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     const buildVariantKey = (color: string, size: string) => `${color}|||${size}`;
 
     // Store variant data (price, stock) in a map keyed by "color|||size"
-    const [variantData, setVariantData] = useState<Record<string, { price: string; stock: string; sku: string }>>(() => {
-        const data: Record<string, { price: string; stock: string; sku: string }> = {};
+    const emptyVariantRow = () => ({
+        price: price,
+        stock: '0',
+        sku: '',
+        salePrice: '',
+    });
+
+    const [variantData, setVariantData] = useState<
+        Record<string, { price: string; stock: string; sku: string; salePrice: string }>
+    >(() => {
+        const data: Record<string, { price: string; stock: string; sku: string; salePrice: string }> = {};
         existingVariants.forEach((v: any) => {
             const key = buildVariantKey(v.color || '', v.size || '');
             data[key] = {
                 price: v.price?.toString() || '',
                 stock: v.stock?.toString() || '0',
-                sku: v.sku || ''
+                sku: v.sku || '',
+                salePrice:
+                    v.sale_price != null && v.sale_price !== ''
+                        ? String(v.sale_price)
+                        : '',
             };
         });
         return data;
@@ -127,29 +145,32 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
     // Build the flat variants array for saving (used by handleSubmit)
     const variants = variantCombinations.map(combo => {
-        const d = variantData[combo.key] || { price: price, stock: '0', sku: '' };
+        const d = variantData[combo.key] || emptyVariantRow();
         return {
             name: combo.size,
             color: combo.color,
             sku: d.sku,
             price: d.price || price,
-            stock: d.stock || '0'
+            salePrice: d.salePrice,
+            stock: d.stock || '0',
         };
     });
 
     const updateVariantField = (key: string, field: string, value: string) => {
         setVariantData(prev => ({
             ...prev,
-            [key]: { ...prev[key] || { price: price, stock: '0', sku: '' }, [field]: value }
+            [key]: { ...prev[key] || emptyVariantRow(), [field]: value },
         }));
     };
 
-    // Bulk set price/stock for all variants
-    const bulkSetField = (field: 'price' | 'stock', value: string) => {
+    const bulkSetField = (field: 'price' | 'stock' | 'salePrice', value: string) => {
         setVariantData(prev => {
             const updated = { ...prev };
             variantCombinations.forEach(combo => {
-                updated[combo.key] = { ...updated[combo.key] || { price: price, stock: '0', sku: '' }, [field]: value };
+                updated[combo.key] = {
+                    ...updated[combo.key] || emptyVariantRow(),
+                    [field]: value,
+                };
             });
             return updated;
         });
@@ -279,12 +300,15 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 ? variants.reduce((sum, v) => sum + (parseInt(v.stock) || 0), 0)
                 : parseInt(stock) || 0;
 
+            const salePriceNum = salePrice.trim() ? parseFloat(salePrice) : NaN;
             const productData = {
                 name: productName,
                 slug: urlSlug || productName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
                 description,
                 category_id: categoryId || null,
                 price: parseFloat(price) || 0,
+                sale_price:
+                    !Number.isNaN(salePriceNum) && salePriceNum > 0 ? salePriceNum : null,
                 compare_at_price: comparePrice ? parseFloat(comparePrice) : null,
                 sku: sku || generateSku(), // Auto-generate if empty
                 quantity: hasVariants ? variantStockTotal : (parseInt(stock) || 0),
@@ -355,11 +379,14 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 if (variants.length > 0) {
                     const variantInserts = variants.map(v => {
                         const colorHex = selectedColors.find(c => c.name === v.color)?.hex || null;
+                        const vSale = v.salePrice?.trim() ? parseFloat(v.salePrice) : NaN;
                         return {
                             product_id: productId,
                             name: v.name || v.color || 'Default',
                             sku: v.sku || null,
                             price: parseFloat(v.price) || 0,
+                            sale_price:
+                                !Number.isNaN(vSale) && vSale > 0 ? vSale : null,
                             quantity: parseInt(v.stock) || 0,
                             option1: v.name || null,
                             option2: v.color?.trim() || null,
@@ -405,7 +432,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 <div className="flex items-center space-x-3">
                     {isEditMode && (
                         <Link
-                            href={`/product/${initialData?.id}`}
+                            href={`/product/${initialData?.slug || initialData?.id}`}
                             target="_blank"
                             className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:border-gray-400 transition-colors font-semibold whitespace-nowrap cursor-pointer flex items-center"
                         >
@@ -416,7 +443,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     <button
                         onClick={handleSubmit}
                         disabled={loading}
-                        className={`px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        className={`px-6 py-3 bg-stone-700 hover:bg-stone-800 text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
                     >
                         {loading ? (
                             <>
@@ -441,7 +468,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`flex items-center space-x-2 px-6 py-4 font-semibold whitespace-nowrap transition-colors border-b-2 cursor-pointer ${activeTab === tab.id
-                                    ? 'border-blue-700 text-blue-700 bg-blue-50'
+                                    ? 'border-stone-700 text-stone-700 bg-stone-50'
                                     : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
                             >
@@ -463,7 +490,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     type="text"
                                     value={productName}
                                     onChange={(e) => setProductName(e.target.value)}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
                                     placeholder="Enter product name"
                                 />
                             </div>
@@ -477,7 +504,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     onChange={(e) => setDescription(e.target.value)}
                                     rows={6}
                                     maxLength={500}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500 resize-none"
                                     placeholder="Describe your product..."
                                 />
                                 <p className="text-sm text-gray-500 mt-2">{description.length}/500 characters</p>
@@ -491,7 +518,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     <select
                                         value={categoryId}
                                         onChange={(e) => setCategoryId(e.target.value)}
-                                        className="w-full px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
+                                        className="w-full px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500 cursor-pointer"
                                     >
                                         {categories.length === 0 && <option value="">Loading categories...</option>}
                                         {categories.length > 0 && <option value="">Select a category</option>}
@@ -508,7 +535,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     <select
                                         value={status}
                                         onChange={(e) => setStatus(e.target.value)}
-                                        className="w-full px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
+                                        className="w-full px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500 cursor-pointer"
                                     >
                                         <option>Active</option>
                                         <option>Draft</option>
@@ -522,7 +549,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     type="checkbox"
                                     checked={featured}
                                     onChange={(e) => setFeatured(e.target.checked)}
-                                    className="w-5 h-5 text-blue-700 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                    className="w-5 h-5 text-stone-700 border-gray-300 rounded focus:ring-stone-500 cursor-pointer"
                                 />
                                 <label className="text-gray-900 font-medium">
                                     Feature this product on homepage
@@ -538,7 +565,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     value={preorderShipping}
                                     onChange={(e) => setPreorderShipping(e.target.value)}
                                     placeholder="e.g., Ships in 14 days, Available March 15"
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-stone-500 focus:border-transparent transition-all"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Leave empty if product ships immediately. Otherwise, enter estimated shipping time.</p>
                             </div>
@@ -550,7 +577,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                             <div className="grid md:grid-cols-2 gap-6">
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                        Price (GH₵) *
+                                        Regular price (GH₵) *
                                     </label>
                                     <div className="relative">
                                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 font-semibold">GH₵</span>
@@ -558,7 +585,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             type="number"
                                             value={price}
                                             onChange={(e) => setPrice(e.target.value)}
-                                            className="w-full pl-16 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            className="w-full pl-16 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
                                             step="0.01"
                                             placeholder="0.00"
                                         />
@@ -567,34 +594,63 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                        Compare at Price (GH₵)
+                                        Sale price (GH₵)
                                     </label>
                                     <div className="relative">
                                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 font-semibold">GH₵</span>
                                         <input
                                             type="number"
+                                            value={salePrice}
+                                            onChange={(e) => setSalePrice(e.target.value)}
+                                            className="w-full pl-16 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
+                                            step="0.01"
+                                            placeholder="Optional"
+                                        />
+                                    </div>
+                                    <p className="text-sm text-gray-500 mt-2">
+                                        Used only when <strong>Store-wide sale</strong> is ON in Admin → Sale pricing. Leave empty to keep regular price during sales.
+                                    </p>
+                                    <div className="mt-3">
+                                        <Link
+                                            href="/admin/sales"
+                                            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-stone-700 border border-stone-300 rounded-lg hover:bg-stone-50"
+                                        >
+                                            <i className="ri-price-tag-2-line"></i>
+                                            Open Sale Pricing Toggle
+                                        </Link>
+                                    </div>
+                                </div>
+
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                        Compare at Price (GH₵)
+                                    </label>
+                                    <div className="relative max-w-md">
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 font-semibold">GH₵</span>
+                                        <input
+                                            type="number"
                                             value={comparePrice}
                                             onChange={(e) => setComparePrice(e.target.value)}
-                                            className="w-full pl-16 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            className="w-full pl-16 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
                                             step="0.01"
                                             placeholder="0.00"
                                         />
                                     </div>
-                                    <p className="text-sm text-gray-500 mt-2">Show original price for comparison</p>
+                                    <p className="text-sm text-gray-500 mt-2">Optional “was” price when not in site-wide sale mode</p>
                                 </div>
                             </div>
 
-                            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                <p className="text-blue-900 font-semibold mb-1">Discount Calculation</p>
+                            <div className="p-4 bg-stone-50 border border-stone-200 rounded-lg">
+                                <p className="text-stone-900 font-semibold mb-1">Discount Calculation</p>
                                 {price && comparePrice && parseFloat(comparePrice) > parseFloat(price) ? (
-                                    <p className="text-blue-800">
+                                    <p className="text-stone-800">
                                         Savings: GH₵ {(parseFloat(comparePrice) - parseFloat(price)).toFixed(2)}
                                         <span className="ml-2">
                                             ({(((parseFloat(comparePrice) - parseFloat(price)) / parseFloat(comparePrice)) * 100).toFixed(0)}% off)
                                         </span>
                                     </p>
                                 ) : (
-                                    <p className="text-blue-800 text-sm">Enter a valid compare price higher than the price to see discount.</p>
+                                    <p className="text-stone-800 text-sm">Enter a valid compare price higher than the price to see discount.</p>
                                 )}
                             </div>
 
@@ -611,14 +667,14 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                 type="text"
                                                 value={sku}
                                                 onChange={(e) => setSku(e.target.value)}
-                                                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono bg-gray-50"
+                                                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500 font-mono bg-gray-50"
                                                 placeholder="Auto-generated"
                                                 readOnly
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => setSku(generateSku())}
-                                                className="px-4 py-3 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors cursor-pointer"
+                                                className="px-4 py-3 border-2 border-gray-300 rounded-lg hover:border-stone-500 hover:bg-stone-50 transition-colors cursor-pointer"
                                                 title="Generate new SKU"
                                             >
                                                 <i className="ri-refresh-line text-lg"></i>
@@ -649,7 +705,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                 type="number"
                                                 value={stock}
                                                 onChange={(e) => setStock(e.target.value)}
-                                                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
                                                 placeholder="0"
                                             />
                                         )}
@@ -666,7 +722,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             value={moq}
                                             onChange={(e) => setMoq(e.target.value)}
                                             min="1"
-                                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
                                             placeholder="1"
                                         />
                                         <p className="text-sm text-gray-500 mt-1">Minimum quantity customers must order</p>
@@ -680,7 +736,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             type="number"
                                             value={lowStockThreshold}
                                             onChange={(e) => setLowStockThreshold(e.target.value)}
-                                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
                                         />
                                         <p className="text-sm text-gray-500 mt-1">Get notified when stock falls below this number</p>
                                     </div>
@@ -699,10 +755,10 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                             {/* STEP 1: Colors */}
                             <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                                 <h4 className="text-sm font-bold text-gray-900 mb-1 flex items-center">
-                                    <i className="ri-palette-line mr-2 text-lg text-blue-700"></i>
+                                    <i className="ri-palette-line mr-2 text-lg text-stone-700"></i>
                                     Step 1: Select Colors
                                     {selectedColors.length > 0 && (
-                                        <span className="ml-2 bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+                                        <span className="ml-2 bg-stone-100 text-stone-800 text-xs font-semibold px-2 py-0.5 rounded-full">
                                             {selectedColors.length} selected
                                         </span>
                                     )}
@@ -717,7 +773,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                 key={color.name}
                                                 onClick={() => toggleColor(color)}
                                                 className={`flex items-center space-x-2 px-3 py-2 rounded-lg border-2 transition-all text-sm font-medium ${isSelected
-                                                        ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600'
+                                                        ? 'border-stone-600 bg-stone-50 ring-1 ring-stone-600'
                                                         : 'border-gray-200 hover:border-gray-300 bg-white'
                                                     }`}
                                                 title={color.name}
@@ -726,8 +782,8 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                     className="w-5 h-5 rounded-full border border-gray-300 flex-shrink-0"
                                                     style={{ backgroundColor: color.hex }}
                                                 ></span>
-                                                <span className={isSelected ? 'text-blue-800' : 'text-gray-700'}>{color.name}</span>
-                                                {isSelected && <i className="ri-check-line text-blue-700"></i>}
+                                                <span className={isSelected ? 'text-stone-800' : 'text-gray-700'}>{color.name}</span>
+                                                {isSelected && <i className="ri-check-line text-stone-700"></i>}
                                             </button>
                                         );
                                     })}
@@ -778,10 +834,10 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                             {/* STEP 2: Sizes */}
                             <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                                 <h4 className="text-sm font-bold text-gray-900 mb-1 flex items-center">
-                                    <i className="ri-ruler-line mr-2 text-lg text-blue-600"></i>
+                                    <i className="ri-ruler-line mr-2 text-lg text-stone-600"></i>
                                     Step 2: Select Sizes
                                     {selectedSizes.length > 0 && (
-                                        <span className="ml-2 bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+                                        <span className="ml-2 bg-stone-100 text-stone-800 text-xs font-semibold px-2 py-0.5 rounded-full">
                                             {selectedSizes.length} selected
                                         </span>
                                     )}
@@ -796,12 +852,12 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                 key={size}
                                                 onClick={() => toggleSize(size)}
                                                 className={`px-5 py-2.5 rounded-lg border-2 font-semibold text-sm transition-all ${isSelected
-                                                        ? 'border-blue-600 bg-blue-50 text-blue-800 ring-1 ring-blue-600'
+                                                        ? 'border-stone-600 bg-stone-50 text-stone-800 ring-1 ring-stone-600'
                                                         : 'border-gray-200 hover:border-gray-300 bg-white text-gray-700'
                                                     }`}
                                             >
                                                 {size}
-                                                {isSelected && <i className="ri-check-line ml-1.5 text-blue-600"></i>}
+                                                {isSelected && <i className="ri-check-line ml-1.5 text-stone-600"></i>}
                                             </button>
                                         );
                                     })}
@@ -870,6 +926,15 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             >
                                                 Bulk Set Stock
                                             </button>
+                                            <button
+                                                onClick={() => {
+                                                    const val = prompt('Set sale price for ALL variants (empty to clear):', '');
+                                                    if (val !== null) bulkSetField('salePrice', val);
+                                                }}
+                                                className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+                                            >
+                                                Bulk Sale Price
+                                            </button>
                                         </div>
                                     </div>
 
@@ -884,12 +949,13 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                         <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Size</th>
                                                     )}
                                                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Price (GH₵)</th>
+                                                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Sale (GH₵)</th>
                                                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Stock</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {variantCombinations.map((combo) => {
-                                                    const d = variantData[combo.key] || { price: price, stock: '0', sku: '' };
+                                                    const d = variantData[combo.key] || emptyVariantRow();
                                                     return (
                                                         <tr key={combo.key} className="border-b border-gray-100 hover:bg-gray-50">
                                                             {selectedColors.length > 0 && (
@@ -915,7 +981,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                                     type="number"
                                                                     value={d.price}
                                                                     onChange={(e) => updateVariantField(combo.key, 'price', e.target.value)}
-                                                                    className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                                                    className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-stone-500 focus:border-stone-500"
                                                                     step="0.01"
                                                                     placeholder={price?.toString() || '0'}
                                                                 />
@@ -923,9 +989,19 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                             <td className="py-3 px-4">
                                                                 <input
                                                                     type="number"
+                                                                    value={d.salePrice}
+                                                                    onChange={(e) => updateVariantField(combo.key, 'salePrice', e.target.value)}
+                                                                    className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-stone-500 focus:border-stone-500"
+                                                                    step="0.01"
+                                                                    placeholder="—"
+                                                                />
+                                                            </td>
+                                                            <td className="py-3 px-4">
+                                                                <input
+                                                                    type="number"
                                                                     value={d.stock}
                                                                     onChange={(e) => updateVariantField(combo.key, 'stock', e.target.value)}
-                                                                    className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                                                    className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-stone-500 focus:border-stone-500"
                                                                     placeholder="0"
                                                                 />
                                                             </td>
@@ -936,8 +1012,8 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                         </table>
                                     </div>
 
-                                    <div className="p-3 bg-blue-50 border-t border-blue-100">
-                                        <p className="text-xs text-blue-800 flex items-center">
+                                    <div className="p-3 bg-stone-50 border-t border-stone-100">
+                                        <p className="text-xs text-stone-800 flex items-center">
                                             <i className="ri-information-line mr-1.5"></i>
                                             Total stock across all variants: <strong className="ml-1">{variants.reduce((sum, v) => sum + (parseInt(v.stock) || 0), 0)}</strong>
                                         </p>
@@ -970,7 +1046,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             <img src={img.url} alt={`Product ${index + 1}`} className="w-full h-full object-cover" />
                                         </div>
                                         {index === 0 && (
-                                            <span className="absolute top-2 left-2 bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold whitespace-nowrap">
+                                            <span className="absolute top-2 left-2 bg-stone-700 text-white px-2 py-1 rounded text-xs font-semibold whitespace-nowrap">
                                                 Primary
                                             </span>
                                         )}
@@ -988,7 +1064,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     </div>
                                 ))}
 
-                                <label className={`aspect-square border-2 border-dashed border-gray-300 rounded-xl hover:border-blue-700 hover:bg-blue-50 transition-colors flex flex-col items-center justify-center space-y-2 text-gray-600 hover:text-blue-700 cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                <label className={`aspect-square border-2 border-dashed border-gray-300 rounded-xl hover:border-stone-700 hover:bg-stone-50 transition-colors flex flex-col items-center justify-center space-y-2 text-gray-600 hover:text-stone-700 cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                     {uploading ? (
                                         <i className="ri-loader-4-line animate-spin text-3xl"></i>
                                     ) : (
@@ -1029,7 +1105,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     type="text"
                                     value={seoTitle}
                                     onChange={(e) => setSeoTitle(e.target.value)}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
                                     placeholder="Seo friendly title"
                                 />
                                 <p className="text-sm text-gray-500 mt-2">60 characters recommended</p>
@@ -1044,7 +1120,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     maxLength={500}
                                     value={metaDescription}
                                     onChange={(e) => setMetaDescription(e.target.value)}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500 resize-none"
                                     placeholder="Seo friendly description"
                                 />
                                 <p className="text-sm text-gray-500 mt-2">160 characters recommended</p>
@@ -1054,18 +1130,22 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                                     URL Slug
                                 </label>
-                                <div className="flex items-center">
-                                    <span className="text-gray-600 bg-gray-100 px-4 py-3 border-2 border-r-0 border-gray-300 rounded-l-lg">
+                                <div className="flex items-center min-w-0">
+                                    <span className="text-gray-600 bg-gray-100 px-4 py-3 border-2 border-r-0 border-gray-300 rounded-l-lg whitespace-nowrap">
                                         store.com/product/
                                     </span>
                                     <input
                                         type="text"
                                         value={urlSlug}
                                         onChange={(e) => setUrlSlug(e.target.value)}
-                                        className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-r-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        autoCapitalize="none"
+                                        autoCorrect="off"
+                                        spellCheck={false}
+                                        className="min-w-0 flex-1 px-4 py-3 border-2 border-gray-300 rounded-r-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
                                         placeholder="product-slug"
                                     />
                                 </div>
+                                <p className="text-sm text-gray-500 mt-2">Use lowercase letters, numbers, and dashes.</p>
                             </div>
 
                             <div>
@@ -1076,7 +1156,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     type="text"
                                     value={keywords}
                                     onChange={(e) => setKeywords(e.target.value)}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
                                     placeholder="keyword1, keyword2"
                                 />
                                 <p className="text-sm text-gray-500 mt-2">Separate keywords with commas</p>

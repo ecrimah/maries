@@ -33,10 +33,10 @@ export async function GET(request: Request) {
         let query = supabase
             .from('products')
             .select(`
-                id, name, slug, price, compare_at_price, quantity, description, metadata,
+                id, name, slug, price, sale_price, compare_at_price, quantity, description, metadata,
                 categories(id, name, slug),
                 product_images(url, position),
-                product_variants(id, name, price, quantity)
+                product_variants(id, name, price, sale_price, quantity)
             `)
             .order('created_at', { ascending: false });
 

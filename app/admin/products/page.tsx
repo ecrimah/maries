@@ -1,8 +1,20 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+
+const LIST_STATE_KEY = 'admin-products-list-state-v1';
+const LIST_STATE_TTL_MS = 30 * 60 * 1000;
+
+type ProductsListState = {
+  viewMode: 'list' | 'grid';
+  sortBy: string;
+  searchQuery: string;
+  showFilters: boolean;
+  scrollY: number;
+  savedAt: number;
+};
 
 export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -10,9 +22,11 @@ export default function ProductsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'draft' | 'archived'>('active');
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<any[]>([]);
+  const [restoreScrollY, setRestoreScrollY] = useState<number | null>(null);
 
   // Statistics
   const [stats, setStats] = useState({
@@ -23,22 +37,17 @@ export default function ProductsPage() {
   });
 
   const statusColors: any = {
-    'active': 'bg-blue-100 text-blue-700',
+    'active': 'bg-stone-100 text-stone-700',
     'draft': 'bg-gray-100 text-gray-700',
     'archived': 'bg-amber-100 text-amber-700',
   };
 
-  useEffect(() => {
-    fetchProducts();
-    fetchCategories();
-  }, [sortBy]);
-
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     const { data } = await supabase.from('categories').select('name');
     if (data) setCategories(data);
-  };
+  }, []);
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       setLoading(true);
       let query = supabase
@@ -49,6 +58,10 @@ export default function ProductsPage() {
           product_variants(count),
           product_images(url, position)
         `);
+
+      if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+      }
 
       // Apply sorting
       if (sortBy === 'newest') query = query.order('created_at', { ascending: false });
@@ -71,26 +84,90 @@ export default function ProductsPage() {
             || 'https://via.placeholder.com/300?text=No+Image',
           variantsCount: p.product_variants?.[0]?.count || 0,
           stock: p.quantity,
-          sales: 0, // Placeholder for now
+          sales: 0,
           rating: p.rating_avg || 0
         }));
 
         setProducts(transformedProducts);
-
-        // Calculate stats locally for now (better to do count queries in production)
-        setStats({
-          total: transformedProducts.length,
-          lowStock: transformedProducts.filter(p => p.quantity < (p.metadata?.low_stock_threshold || 5) && p.quantity > 0).length,
-          outOfStock: transformedProducts.filter(p => p.quantity === 0).length,
-          active: transformedProducts.filter(p => p.status === 'active').length
-        });
       }
+
+      // Stats always computed from active products only
+      const { data: allActive } = await supabase
+        .from('products')
+        .select('quantity,status')
+        .eq('status', 'active');
+      const { count: totalCount } = await supabase
+        .from('products')
+        .select('id', { count: 'exact', head: true });
+
+      const activeList = allActive || [];
+      setStats({
+        total: totalCount || 0,
+        active: activeList.length,
+        lowStock: activeList.filter(p => (p.quantity || 0) > 0 && (p.quantity || 0) < 10).length,
+        outOfStock: activeList.filter(p => !p.quantity || p.quantity === 0).length,
+      });
     } catch (error) {
       console.error('Error fetching products:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [sortBy, statusFilter]);
+
+  const persistListState = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const state: ProductsListState = {
+      viewMode,
+      sortBy,
+      searchQuery,
+      showFilters,
+      scrollY: window.scrollY,
+      savedAt: Date.now(),
+    };
+    sessionStorage.setItem(LIST_STATE_KEY, JSON.stringify(state));
+  }, [viewMode, sortBy, searchQuery, showFilters]);
+
+  useEffect(() => {
+    fetchProducts();
+    fetchCategories();
+  }, [fetchProducts, fetchCategories]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const raw = sessionStorage.getItem(LIST_STATE_KEY);
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as ProductsListState;
+      if (!parsed?.savedAt || Date.now() - parsed.savedAt > LIST_STATE_TTL_MS) {
+        sessionStorage.removeItem(LIST_STATE_KEY);
+        return;
+      }
+      if (parsed.viewMode === 'list' || parsed.viewMode === 'grid') setViewMode(parsed.viewMode);
+      if (typeof parsed.sortBy === 'string') setSortBy(parsed.sortBy);
+      if (typeof parsed.searchQuery === 'string') setSearchQuery(parsed.searchQuery);
+      if (typeof parsed.showFilters === 'boolean') setShowFilters(parsed.showFilters);
+      if (typeof parsed.scrollY === 'number' && parsed.scrollY >= 0) setRestoreScrollY(parsed.scrollY);
+    } catch {
+      sessionStorage.removeItem(LIST_STATE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (loading || restoreScrollY == null || typeof window === 'undefined') return;
+    const timer = window.setTimeout(() => {
+      window.scrollTo({ top: restoreScrollY, behavior: 'auto' });
+      setRestoreScrollY(null);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loading, restoreScrollY]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onBeforeUnload = () => persistListState();
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [persistListState]);
 
   const handleSelectAll = () => {
     if (selectedProducts.length === products.length) {
@@ -109,27 +186,58 @@ export default function ProductsPage() {
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    if (confirm('Are you sure you want to delete this product?')) {
-      const { error } = await supabase.from('products').delete().eq('id', productId);
-      if (!error) {
-        setProducts(products.filter(p => p.id !== productId));
-        alert('Product deleted successfully');
-      } else {
-        alert('Error deleting product');
+    if (!confirm('Are you sure you want to delete this product?')) return;
+    try {
+      // Unlink from order_items so we can delete (order history keeps product_name/sku/price)
+      await supabase.from('order_items').update({ product_id: null, variant_id: null }).eq('product_id', productId);
+      // Delete in dependency order: review_images → reviews → cart_items → wishlist_items → product_images → product_variants → products
+      const { data: reviewIds } = await supabase.from('reviews').select('id').eq('product_id', productId);
+      if (reviewIds?.length) {
+        const ids = reviewIds.map((r) => r.id);
+        await supabase.from('review_images').delete().in('review_id', ids);
+        await supabase.from('reviews').delete().eq('product_id', productId);
       }
+      await supabase.from('cart_items').delete().eq('product_id', productId);
+      await supabase.from('wishlist_items').delete().eq('product_id', productId);
+      await supabase.from('product_images').delete().eq('product_id', productId);
+      await supabase.from('product_variants').delete().eq('product_id', productId);
+      const { error } = await supabase.from('products').delete().eq('id', productId);
+      if (error) throw error;
+      setProducts(products.filter((p) => p.id !== productId));
+      alert('Product deleted successfully');
+    } catch (err: any) {
+      alert('Error deleting product: ' + (err?.message || 'Please try again.'));
     }
   };
 
   const handleBulkDelete = async () => {
-    if (confirm(`Are you sure you want to delete ${selectedProducts.length} products?`)) {
-      const { error } = await supabase.from('products').delete().in('id', selectedProducts);
-      if (!error) {
-        setProducts(products.filter(p => !selectedProducts.includes(p.id)));
-        setSelectedProducts([]);
-        alert('Products deleted successfully');
-      } else {
-        alert('Error deleting products');
+    if (!confirm(`Are you sure you want to delete ${selectedProducts.length} product(s)?`)) return;
+    const failed: string[] = [];
+    for (const productId of selectedProducts) {
+      try {
+        await supabase.from('order_items').update({ product_id: null, variant_id: null }).eq('product_id', productId);
+        const { data: reviewIds } = await supabase.from('reviews').select('id').eq('product_id', productId);
+        if (reviewIds?.length) {
+          const ids = reviewIds.map((r) => r.id);
+          await supabase.from('review_images').delete().in('review_id', ids);
+          await supabase.from('reviews').delete().eq('product_id', productId);
+        }
+        await supabase.from('cart_items').delete().eq('product_id', productId);
+        await supabase.from('wishlist_items').delete().eq('product_id', productId);
+        await supabase.from('product_images').delete().eq('product_id', productId);
+        await supabase.from('product_variants').delete().eq('product_id', productId);
+        const { error } = await supabase.from('products').delete().eq('id', productId);
+        if (error) throw error;
+      } catch {
+        failed.push(products.find((p) => p.id === productId)?.name || productId.slice(0, 8));
       }
+    }
+    setProducts(products.filter((p) => !selectedProducts.includes(p.id)));
+    setSelectedProducts([]);
+    if (failed.length) {
+      alert(`Deleted ${selectedProducts.length - failed.length}. Failed: ${failed.join(', ')}`);
+    } else {
+      alert('Products deleted successfully');
     }
   };
 
@@ -149,7 +257,7 @@ export default function ProductsPage() {
         </div>
         <Link
           href="/admin/products/new"
-          className="px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center md:items-start"
+          className="px-6 py-3 bg-stone-700 hover:bg-stone-800 text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center md:items-start"
         >
           <i className="ri-add-line mr-2"></i>
           Add Product
@@ -163,7 +271,7 @@ export default function ProductsPage() {
         </div>
         <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
           <p className="text-sm text-gray-600 mb-1">Active</p>
-          <p className="text-2xl font-bold text-blue-700">{stats.active}</p>
+          <p className="text-2xl font-bold text-stone-700">{stats.active}</p>
         </div>
         <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
           <p className="text-sm text-gray-600 mb-1">Low Stock</p>
@@ -186,7 +294,7 @@ export default function ProductsPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search products by name, SKU, or category..."
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500 text-sm"
                 />
               </div>
             </div>
@@ -202,7 +310,7 @@ export default function ProductsPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
+                className="px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500 font-medium cursor-pointer"
               >
                 <option value="newest">Newest First</option>
                 <option value="name">Sort by Name</option>
@@ -213,14 +321,14 @@ export default function ProductsPage() {
               <div className="flex border-2 border-gray-300 rounded-lg overflow-hidden">
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`w-10 h-10 flex items-center justify-center transition-colors cursor-pointer ${viewMode === 'list' ? 'bg-blue-700 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  className={`w-10 h-10 flex items-center justify-center transition-colors cursor-pointer ${viewMode === 'list' ? 'bg-stone-700 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   <i className="ri-list-check text-xl w-5 h-5 flex items-center justify-center"></i>
                 </button>
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`w-10 h-10 flex items-center justify-center border-l-2 border-gray-300 transition-colors cursor-pointer ${viewMode === 'grid' ? 'bg-blue-700 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  className={`w-10 h-10 flex items-center justify-center border-l-2 border-gray-300 transition-colors cursor-pointer ${viewMode === 'grid' ? 'bg-stone-700 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   <i className="ri-grid-line text-xl w-5 h-5 flex items-center justify-center"></i>
@@ -235,19 +343,23 @@ export default function ProductsPage() {
                 <option value="">All Categories</option>
                 {categories.map((cat: any) => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
               </select>
-              <select className="px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer">
-                <option>All Status</option>
-                <option>Active</option>
-                <option>Draft</option>
-                <option>Archived</option>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'draft' | 'archived')}
+                className="px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer"
+              >
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="draft">Draft</option>
+                <option value="archived">Archived</option>
               </select>
             </div>
           )}
         </div>
 
         {selectedProducts.length > 0 && (
-          <div className="p-4 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
-            <p className="text-blue-800 font-semibold">
+          <div className="p-4 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
+            <p className="text-stone-800 font-semibold">
               {selectedProducts.length} product{selectedProducts.length > 1 ? 's' : ''} selected
             </p>
             <div className="flex items-center space-x-2">
@@ -282,7 +394,7 @@ export default function ProductsPage() {
                       type="checkbox"
                       checked={selectedProducts.length === products.length && products.length > 0}
                       onChange={handleSelectAll}
-                      className="w-4 h-4 text-blue-700 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                      className="w-4 h-4 text-stone-700 border-gray-300 rounded focus:ring-stone-500 cursor-pointer"
                     />
                   </th>
                   <th className="text-left py-4 px-4 text-sm font-semibold text-gray-700">Product</th>
@@ -302,7 +414,7 @@ export default function ProductsPage() {
                         type="checkbox"
                         checked={selectedProducts.includes(product.id)}
                         onChange={() => handleSelectProduct(product.id)}
-                        className="w-4 h-4 text-blue-700 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                        className="w-4 h-4 text-stone-700 border-gray-300 rounded focus:ring-stone-500 cursor-pointer"
                       />
                     </td>
                     <td className="py-4 px-4">
@@ -339,7 +451,8 @@ export default function ProductsPage() {
                       <div className="flex items-center space-x-2">
                         <Link
                           href={`/admin/products/${product.id}`}
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                          onClick={persistListState}
+                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-stone-700 hover:bg-stone-50 rounded-lg transition-colors cursor-pointer"
                         >
                           <i className="ri-edit-line text-lg"></i>
                         </Link>
@@ -365,7 +478,7 @@ export default function ProductsPage() {
                     type="checkbox"
                     checked={selectedProducts.includes(product.id)}
                     onChange={() => handleSelectProduct(product.id)}
-                    className="absolute top-2 left-2 w-5 h-5 text-blue-700 border-gray-300 rounded focus:ring-blue-500 cursor-pointer z-10"
+                    className="absolute top-2 left-2 w-5 h-5 text-stone-700 border-gray-300 rounded focus:ring-stone-500 cursor-pointer z-10"
                   />
                   <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-3 border border-gray-200">
                     <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
@@ -385,7 +498,8 @@ export default function ProductsPage() {
                 <div className="flex items-center space-x-2">
                   <Link
                     href={`/admin/products/${product.id}`}
-                    className="flex-1 bg-blue-700 hover:bg-blue-800 text-white py-2 rounded-lg text-sm font-medium text-center transition-colors whitespace-nowrap cursor-pointer"
+                    onClick={persistListState}
+                    className="flex-1 bg-stone-700 hover:bg-stone-800 text-white py-2 rounded-lg text-sm font-medium text-center transition-colors whitespace-nowrap cursor-pointer"
                   >
                     Edit
                   </Link>
