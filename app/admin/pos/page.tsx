@@ -471,57 +471,71 @@ export default function POSPage() {
     const handlePrintReceipt = () => {
         if (!completedOrder) return;
         const items = completedOrder.items || [];
-        const receiptHtml = `
-            <html><head><title>Receipt</title>
-            <style>
-                * { margin: 0; padding: 0; box-sizing: border-box; }
-                body { font-family: 'Courier New', monospace; width: 280px; margin: 0 auto; padding: 10px; font-size: 12px; color: #000; }
-                .center { text-align: center; }
-                .bold { font-weight: bold; }
-                .line { border-top: 1px dashed #000; margin: 8px 0; }
-                .row { display: flex; justify-content: space-between; padding: 2px 0; }
-                .items td { padding: 3px 0; }
-                .items { width: 100%; border-collapse: collapse; }
-                .items .qty { text-align: center; width: 30px; }
-                .items .price { text-align: right; width: 70px; }
-                .items .name { text-align: left; }
-                h1 { font-size: 18px; margin-bottom: 2px; }
-                @media print { body { width: 100%; } }
-            </style></head><body>
-            <div class="center">
-                <h1 class="bold">Maries Hair</h1>
-                <p>Kpakpo mankralo road 55, Mataheko</p>
-                <p>Tel: 0547742920</p>
-            </div>
-            <div class="line"></div>
-            <div class="row"><span>Order:</span><span class="bold">#${completedOrder.orderNumber}</span></div>
-            <div class="row"><span>Date:</span><span>${new Date().toLocaleString()}</span></div>
-            <div class="row"><span>Payment:</span><span>${paymentMethod.toUpperCase()}</span></div>
-            <div class="line"></div>
-            <table class="items">
-                <tr class="bold"><td class="name">Item</td><td class="qty">Qty</td><td class="price">Price</td></tr>
-                ${items.map((i: any) => `<tr><td class="name">${i.name}</td><td class="qty">${i.cartQuantity}</td><td class="price">GH₵${(i.price * i.cartQuantity).toFixed(2)}</td></tr>`).join('')}
-            </table>
-            <div class="line"></div>
-            <div class="row bold" style="font-size:14px"><span>TOTAL</span><span>GH₵${completedOrder.total.toFixed(2)}</span></div>
-            ${paymentMethod === 'cash' && changeDue > 0 ? `
-                <div class="row"><span>Tendered:</span><span>GH₵${parseFloat(amountTendered).toFixed(2)}</span></div>
-                <div class="row bold"><span>Change:</span><span>GH₵${changeDue.toFixed(2)}</span></div>
-            ` : ''}
-            <div class="line"></div>
-            <div class="center" style="margin-top:8px">
-                <p>Thank you for shopping!</p>
-                <p style="font-size:10px;margin-top:4px">www.shopmarieshair.com</p>
-            </div>
-            </body></html>
-        `;
-        const printWindow = window.open('', '_blank', 'width=320,height=600');
-        if (printWindow) {
-            printWindow.document.write(receiptHtml);
-            printWindow.document.close();
-            printWindow.focus();
-            setTimeout(() => { printWindow.print(); printWindow.close(); }, 300);
-        }
+        const receiptHtml = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Receipt</title>
+<style>
+  @page { margin: 0; padding: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    width: 48mm;
+    max-width: 48mm;
+    padding: 2mm;
+    font-size: 11px;
+    line-height: 1.3;
+    color: #000;
+  }
+  .c { text-align: center; }
+  .b { font-weight: bold; }
+  .sep { border-top: 1px dashed #000; margin: 4px 0; }
+  .r { display: flex; justify-content: space-between; padding: 1px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 2px 0; vertical-align: top; font-size: 11px; }
+  .n { max-width: 26mm; word-wrap: break-word; overflow-wrap: break-word; }
+  .q { text-align: center; width: 6mm; }
+  .p { text-align: right; white-space: nowrap; }
+  .total { font-size: 13px; }
+</style></head><body>
+<div class="c"><p class="b" style="font-size:14px">Maries Hair</p>
+<p style="font-size:9px">Kpakpo mankralo road 55</p>
+<p style="font-size:9px">Mataheko | 0547742920</p></div>
+<div class="sep"></div>
+<div class="r"><span>Order:</span><span class="b">#${completedOrder.orderNumber}</span></div>
+<div class="r"><span>Date:</span><span>${new Date().toLocaleString()}</span></div>
+<div class="r"><span>Pay:</span><span>${paymentMethod.toUpperCase()}</span></div>
+<div class="sep"></div>
+<table>
+<tr class="b"><td class="n">Item</td><td class="q">Qty</td><td class="p">Amt</td></tr>
+${items.map((i: any) => {
+    const name = i.name.length > 20 ? i.name.substring(0, 20) + '..' : i.name;
+    return `<tr><td class="n">${name}</td><td class="q">${i.cartQuantity}</td><td class="p">${(i.price * i.cartQuantity).toFixed(2)}</td></tr>`;
+}).join('')}
+</table>
+<div class="sep"></div>
+<div class="r total b"><span>TOTAL</span><span>GH₵${completedOrder.total.toFixed(2)}</span></div>
+${paymentMethod === 'cash' && changeDue > 0 ? `
+<div class="r"><span>Tendered:</span><span>GH₵${parseFloat(amountTendered).toFixed(2)}</span></div>
+<div class="r b"><span>Change:</span><span>GH₵${changeDue.toFixed(2)}</span></div>` : ''}
+<div class="sep"></div>
+<div class="c" style="margin-top:3px">
+<p style="font-size:10px">Thank you for shopping!</p>
+<p style="font-size:8px;margin-top:2px">www.shopmarieshair.com</p>
+</div>
+<div style="margin-top:6mm"></div>
+</body></html>`;
+        const printWindow = window.open('', '_blank', 'width=300,height=500');
+        if (!printWindow) return;
+        printWindow.document.write(receiptHtml);
+        printWindow.document.close();
+        printWindow.focus();
+        const printed = { done: false };
+        printWindow.onafterprint = () => {
+            if (!printed.done) { printed.done = true; printWindow.close(); }
+        };
+        setTimeout(() => {
+            printWindow.print();
+            setTimeout(() => { if (!printed.done) { printed.done = true; printWindow.close(); } }, 2000);
+        }, 400);
     };
 
     const resetCheckout = () => {
