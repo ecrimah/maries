@@ -19,7 +19,7 @@ export default function PageHero({ title, subtitle, backgroundImage }: PageHeroP
                         className="object-cover"
                         priority
                         sizes="100vw"
-                        quality={82}
+                        quality={75}
                     />
                     <div className="absolute inset-0 bg-black/50"></div>
                 </>

@@ -139,6 +139,7 @@ export default function Home() {
         {[
           {
             image: '/image1.jpeg',
+            blur: 'data:image/jpeg;base64,/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAJABADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABgQF/8QAIBAAAAUEAwEAAAAAAAAAAAAAAAECAwQFBhFxEiE0Q//EABQBAQAAAAAAAAAAAAAAAAAAAAX/xAAZEQADAAMAAAAAAAAAAAAAAAAAARECAxP/2gAMAwEAAhEDEQA/AKaBeLVMtlTSVYeUWCIG3q5IlMrOUoz5H1kFV/LY1pPnb0CurtGlpxkP/9k=',
             tag: 'New Arrivals',
             heading: <>Premium <br /><span className="italic font-light text-transparent bg-clip-text bg-gradient-to-r from-stone-200 to-stone-400">Quality Collection</span></>,
             subtext: 'Discover our latest arrivals imported directly for you. Unmatched quality at unbeatable prices.',
@@ -148,6 +149,7 @@ export default function Home() {
           },
           {
             image: '/image2.jpeg',
+            blur: 'data:image/jpeg;base64,/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAJABADASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAAB//EACAQAAEEAgEFAAAAAAAAAAAAAAEAAgMEBhEFNDVBcXL/xAAUAQEAAAAAAAAAAAAAAAAAAAAE/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAECEf/aAAwDAQACEQMRAD8AM6PLy2YY60btsJA0lajHQqYsWWQGvePKEcP6yL6StmHZofSFULcHK2f/2Q==',
             tag: 'Fashion & Style',
             heading: <>Elegance <br /><span className="italic font-light text-transparent bg-clip-text bg-gradient-to-r from-rose-200 to-rose-400">Redefined</span></>,
             subtext: 'Step into the season with our exclusive hair collections. Curated for the modern trendsetter.',
@@ -157,6 +159,7 @@ export default function Home() {
           },
           {
             image: '/image3.jpeg',
+            blur: 'data:image/jpeg;base64,/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAJABADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAMFB//EAB4QAAEEAwADAAAAAAAAAAAAAAEAAgMEBQYhFDM0/8QAFAEBAAAAAAAAAAAAAAAAAAAABf/EABcRAQEBAQAAAAAAAAAAAAAAABEAEhP/2gAMAwEAAhEDEQA/AJ3laUeDikicDMwcTNU2OrJaFjIkNLTwlZzQ+AIn9CM5rJbC/9k=',
             tag: 'Exclusive Deals',
             heading: <>Limited <br /><span className="italic font-light text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-500">Time Offers</span></>,
             subtext: 'Don\'t miss out on our seasonal sale. Great discounts on your favorite items.',
@@ -177,8 +180,11 @@ export default function Home() {
                 fill
                 className={`object-cover ${slide.position}`}
                 priority={index === 0}
+                loading={index === 0 ? 'eager' : 'lazy'}
                 sizes="100vw"
-                quality={85}
+                quality={80}
+                placeholder="blur"
+                blurDataURL={slide.blur}
               />
             </div>
 
@@ -310,7 +316,7 @@ export default function Home() {
                     fill
                     className="object-cover transition-transform duration-[1200ms] ease-[cubic-bezier(0.25,0.1,0.25,1)] group-hover:scale-110"
                     sizes="(max-width: 768px) 50vw, 25vw"
-                    quality={85}
+                    quality={75}
                     loading="lazy"
                   />
                   {/* Premium Gradient Overlay */}
