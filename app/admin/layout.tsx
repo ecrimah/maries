@@ -143,7 +143,7 @@ export default function AdminLayout({
     return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">Loading Admin...</div>;
   }
 
-  const menuItems = [
+  const menuItems: Array<{ title: string; icon: string; path: string; exact?: boolean; badge?: string; moduleId?: string; roles?: string[] }> = [
     {
       title: 'Dashboard',
       icon: 'ri-dashboard-line',
@@ -169,74 +169,84 @@ export default function AdminLayout({
     {
       title: 'Sale pricing',
       icon: 'ri-price-tag-2-line',
-      path: '/admin/sales'
+      path: '/admin/sales',
+      roles: ['admin']
     },
     {
       title: 'Categories',
       icon: 'ri-folder-line',
-      path: '/admin/categories'
+      path: '/admin/categories',
+      roles: ['admin']
     },
     {
       title: 'Customers',
       icon: 'ri-group-line',
-      path: '/admin/customers'
+      path: '/admin/customers',
+      roles: ['admin']
     },
     {
       title: 'Reviews',
       icon: 'ri-chat-smile-2-line',
-      path: '/admin/reviews'
+      path: '/admin/reviews',
+      roles: ['admin']
     },
     {
       title: 'Inventory',
       icon: 'ri-stack-line',
-      path: '/admin/inventory'
+      path: '/admin/inventory',
+      roles: ['admin']
     },
     {
       title: 'Analytics',
       icon: 'ri-bar-chart-line',
-      path: '/admin/analytics'
+      path: '/admin/analytics',
+      roles: ['admin']
     },
     {
       title: 'Coupons',
       icon: 'ri-coupon-2-line',
-      path: '/admin/coupons'
+      path: '/admin/coupons',
+      roles: ['admin']
     },
     {
       title: 'Customer Insights',
       icon: 'ri-user-search-line',
       path: '/admin/customer-insights',
-      moduleId: 'customer-insights'
+      moduleId: 'customer-insights',
+      roles: ['admin']
     },
     {
       title: 'Notifications',
       icon: 'ri-notification-3-line',
       path: '/admin/notifications',
-      moduleId: 'notifications'
+      moduleId: 'notifications',
+      roles: ['admin']
     },
     {
       title: 'SMS Debugger',
       icon: 'ri-message-2-line',
-      path: '/admin/test-sms'
+      path: '/admin/test-sms',
+      roles: ['admin']
     },
-
     {
       title: 'Blog',
       icon: 'ri-article-line',
       path: '/admin/blog',
-      moduleId: 'blog'
+      moduleId: 'blog',
+      roles: ['admin']
     },
     {
       title: 'Modules',
       icon: 'ri-puzzle-line',
-      path: '/admin/modules'
+      path: '/admin/modules',
+      roles: ['admin']
     },
   ];
 
   const visibleMenuItems = menuItems.filter(item => {
-    // @ts-ignore
-    if (!item.moduleId) return true;
-    // @ts-ignore
-    return enabledModules.includes(item.moduleId);
+    if (item.roles && userRole && !item.roles.includes(userRole)) return false;
+    if (item.moduleId && !enabledModules.includes(item.moduleId)) return false;
+    return true;
   });
 
   // Special layout for Login Page
