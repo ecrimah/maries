@@ -321,7 +321,7 @@ export default function Home() {
 
                   {/* Content */}
                   <div className="absolute inset-0 p-6 md:p-8 flex flex-col justify-end z-20">
-                    <div className="overflow-hidden">
+                    <div className="overflow-visible">
                       <h3 className="font-serif font-medium text-white text-2xl md:text-3xl tracking-wide transform translate-y-4 group-hover:translate-y-0 transition-transform duration-700 ease-out">{category.name}</h3>
                     </div>
 
