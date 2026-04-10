@@ -29,7 +29,8 @@ export function generateMetadata({
   author,
   noindex = false
 }: SEOProps): Metadata {
-  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://example.com';
+  const rawUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.shopmarieshair.com';
+  const siteUrl = /^https?:\/\//.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
   const defaultOgImage = `${siteUrl}/logo.png`;
   const resolvedOgImage = ogImage || defaultOgImage;
   const siteName = 'Maries Hair';
@@ -161,7 +162,8 @@ export function generateBreadcrumbSchema(items: { name: string; url: string }[])
 }
 
 export function generateOrganizationSchema() {
-  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://example.com';
+  const rawUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.shopmarieshair.com';
+  const siteUrl = /^https?:\/\//.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
   return {
     '@context': 'https://schema.org',
     '@type': 'Organization',
@@ -181,7 +183,8 @@ export function generateOrganizationSchema() {
 }
 
 export function generateWebsiteSchema() {
-  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://example.com';
+  const rawUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.shopmarieshair.com';
+  const siteUrl = /^https?:\/\//.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
   return {
     '@context': 'https://schema.org',
     '@type': 'WebSite',

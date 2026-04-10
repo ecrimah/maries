@@ -17,7 +17,14 @@ export const viewport: Viewport = {
   themeColor: '#2563eb',
 };
 
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.shopmarieshair.com';
+function normalizeSiteUrl(raw?: string): string {
+  const fallback = 'https://www.shopmarieshair.com';
+  if (!raw) return fallback;
+  if (!/^https?:\/\//.test(raw)) raw = `https://${raw}`;
+  if (!/^https?:\/\/www\./.test(raw)) raw = raw.replace(/^(https?:\/\/)/, '$1www.');
+  return raw;
+}
+const siteUrl = normalizeSiteUrl(process.env.NEXT_PUBLIC_APP_URL);
 
 // Favicon & OG from public: add favicon.ico, favicon.png, og-image.png (1200×630) to public as needed
 export const metadata: Metadata = {

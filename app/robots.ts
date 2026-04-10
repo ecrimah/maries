@@ -1,6 +1,12 @@
 import { MetadataRoute } from 'next';
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.shopmarieshair.com';
+function normalizeSiteUrl(raw?: string): string {
+  const fallback = 'https://www.shopmarieshair.com';
+  if (!raw) return fallback;
+  if (!/^https?:\/\//.test(raw)) raw = `https://${raw}`;
+  return raw;
+}
+const BASE_URL = normalizeSiteUrl(process.env.NEXT_PUBLIC_APP_URL);
 
 export default function robots(): MetadataRoute.Robots {
   return {

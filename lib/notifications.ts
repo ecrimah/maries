@@ -10,7 +10,7 @@ const BRAND = {
     color: '#2563eb',
     colorLight: '#eff6ff',
     colorDark: '#064e3b',
-    url: (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, ''),
+    url: ((/^https?:\/\//.test(process.env.NEXT_PUBLIC_APP_URL || '') ? process.env.NEXT_PUBLIC_APP_URL! : `https://${process.env.NEXT_PUBLIC_APP_URL || 'www.shopmarieshair.com'}`)).replace(/\/+$/, ''),
     phone: '0547742920',
 };
 
@@ -186,7 +186,7 @@ export async function sendSMS({ to, message }: { to: string; message: string }) 
 export async function sendOrderConfirmation(order: any) {
     const { id, email, phone: orderPhone, shipping_address, total, created_at, order_number, metadata } = order;
 
-    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '');
+    const baseUrl = BRAND.url;
 
     // Build customer name from available sources
     const getName = () => {
@@ -308,7 +308,7 @@ ${emailButton('View Order in Admin', `${baseUrl}/admin/orders/${id}`)}
 export async function sendOrderStatusUpdate(order: any, newStatus: string) {
     const { id, email, phone: orderPhone, shipping_address, order_number, metadata } = order;
 
-    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '');
+    const baseUrl = BRAND.url;
 
     // Build customer name from available sources
     const getName = () => {
@@ -446,7 +446,7 @@ ${emailButton('Start Shopping', `${BRAND.url}/shop`)}
 export async function sendPaymentLink(order: any) {
     const { id, email, phone: orderPhone, shipping_address, total, order_number, metadata } = order;
 
-    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '');
+    const baseUrl = BRAND.url;
     const paymentUrl = `${baseUrl}/pay/${id}`;
 
     // Build customer name from available sources

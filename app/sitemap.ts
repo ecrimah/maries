@@ -4,7 +4,13 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.shopmarieshair.com';
+function normalizeSiteUrl(raw?: string): string {
+  const fallback = 'https://www.shopmarieshair.com';
+  if (!raw) return fallback;
+  if (!/^https?:\/\//.test(raw)) raw = `https://${raw}`;
+  return raw;
+}
+const BASE_URL = normalizeSiteUrl(process.env.NEXT_PUBLIC_APP_URL);
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
