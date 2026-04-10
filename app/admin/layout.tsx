@@ -136,6 +136,17 @@ export default function AdminLayout({
     // Optional: Auto-close on resize to mobile? For now, leave as is.
   }, []);
 
+  const staffAllowedPrefixes = ['/admin/pos', '/admin/products', '/admin/orders'];
+  const isStaffBlocked = userRole === 'staff'
+    && pathname !== '/admin/login'
+    && !staffAllowedPrefixes.some(p => pathname.startsWith(p));
+
+  useEffect(() => {
+    if (isStaffBlocked && isAuthenticated) {
+      router.replace('/admin/pos');
+    }
+  }, [isStaffBlocked, isAuthenticated, router]);
+
   const handleLogout = async () => {
     // Clear auth cookies set during login
     document.cookie = 'sb-access-token=; path=/; max-age=0; SameSite=Lax; Secure';
@@ -254,17 +265,6 @@ export default function AdminLayout({
     if (item.moduleId && !enabledModules.includes(item.moduleId)) return false;
     return true;
   });
-
-  const staffAllowedPrefixes = ['/admin/pos', '/admin/products', '/admin/orders'];
-  const isStaffBlocked = userRole === 'staff'
-    && pathname !== '/admin/login'
-    && !staffAllowedPrefixes.some(p => pathname.startsWith(p));
-
-  useEffect(() => {
-    if (isStaffBlocked && isAuthenticated) {
-      router.replace('/admin/pos');
-    }
-  }, [isStaffBlocked, isAuthenticated, router]);
 
   // Special layout for Login Page
   if (pathname === '/admin/login') {
