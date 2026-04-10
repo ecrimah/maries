@@ -86,7 +86,9 @@ export default function POSPage() {
           categories(name),
           product_images(url)
         `)
-                .order('name');
+                .eq('status', 'active')
+                .order('name')
+                .limit(1000);
 
             if (prodData) {
                 const formatted: Product[] = prodData.map((p: any) => ({
@@ -160,9 +162,11 @@ export default function POSPage() {
     // Computed
     const filteredProducts = useMemo(() => {
         return products.filter(p => {
-            const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                p.sku?.toLowerCase().includes(searchQuery.toLowerCase());
-            const matchesCat = activeCategory === 'All' || p.category === activeCategory;
+            const query = searchQuery.toLowerCase().trim();
+            const matchesSearch = !query || p.name.toLowerCase().includes(query) ||
+                p.sku?.toLowerCase().includes(query);
+            // When searching, ignore category filter so all matching products show
+            const matchesCat = query || activeCategory === 'All' || p.category === activeCategory;
             return matchesSearch && matchesCat;
         });
     }, [products, searchQuery, activeCategory]);
