@@ -327,8 +327,9 @@ export default function Home() {
 
                     <div className="flex items-center text-white/90 font-medium mt-3 opacity-0 group-hover:opacity-100 transition-all duration-700 transform translate-y-4 group-hover:translate-y-0 delay-100">
                       <span className="uppercase tracking-[0.15em] text-xs font-semibold">Explore</span>
-                      <div className="ml-4 w-6 h-[1px] bg-white/70 group-hover:w-10 transition-all duration-700 ease-out relative">
-                        <i className="ri-arrow-right-s-line absolute -right-2 -top-[11px] text-[22px] text-white/70"></i>
+                      <div className="ml-3 flex items-center">
+                        <div className="w-6 h-[1.5px] bg-white/70 group-hover:w-10 transition-all duration-700 ease-out"></div>
+                        <i className="ri-arrow-right-s-line text-[22px] text-white/70 -ml-[5px] leading-none flex items-center"></i>
                       </div>
                     </div>
                   </div>
