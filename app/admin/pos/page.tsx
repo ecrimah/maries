@@ -468,6 +468,62 @@ export default function POSPage() {
         }
     };
 
+    const handlePrintReceipt = () => {
+        if (!completedOrder) return;
+        const items = completedOrder.items || [];
+        const receiptHtml = `
+            <html><head><title>Receipt</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: 'Courier New', monospace; width: 280px; margin: 0 auto; padding: 10px; font-size: 12px; color: #000; }
+                .center { text-align: center; }
+                .bold { font-weight: bold; }
+                .line { border-top: 1px dashed #000; margin: 8px 0; }
+                .row { display: flex; justify-content: space-between; padding: 2px 0; }
+                .items td { padding: 3px 0; }
+                .items { width: 100%; border-collapse: collapse; }
+                .items .qty { text-align: center; width: 30px; }
+                .items .price { text-align: right; width: 70px; }
+                .items .name { text-align: left; }
+                h1 { font-size: 18px; margin-bottom: 2px; }
+                @media print { body { width: 100%; } }
+            </style></head><body>
+            <div class="center">
+                <h1 class="bold">Maries Hair</h1>
+                <p>Kpakpo mankralo road 55, Mataheko</p>
+                <p>Tel: 0547742920</p>
+            </div>
+            <div class="line"></div>
+            <div class="row"><span>Order:</span><span class="bold">#${completedOrder.orderNumber}</span></div>
+            <div class="row"><span>Date:</span><span>${new Date().toLocaleString()}</span></div>
+            <div class="row"><span>Payment:</span><span>${paymentMethod.toUpperCase()}</span></div>
+            <div class="line"></div>
+            <table class="items">
+                <tr class="bold"><td class="name">Item</td><td class="qty">Qty</td><td class="price">Price</td></tr>
+                ${items.map((i: any) => `<tr><td class="name">${i.name}</td><td class="qty">${i.cartQuantity}</td><td class="price">GH₵${(i.price * i.cartQuantity).toFixed(2)}</td></tr>`).join('')}
+            </table>
+            <div class="line"></div>
+            <div class="row bold" style="font-size:14px"><span>TOTAL</span><span>GH₵${completedOrder.total.toFixed(2)}</span></div>
+            ${paymentMethod === 'cash' && changeDue > 0 ? `
+                <div class="row"><span>Tendered:</span><span>GH₵${parseFloat(amountTendered).toFixed(2)}</span></div>
+                <div class="row bold"><span>Change:</span><span>GH₵${changeDue.toFixed(2)}</span></div>
+            ` : ''}
+            <div class="line"></div>
+            <div class="center" style="margin-top:8px">
+                <p>Thank you for shopping!</p>
+                <p style="font-size:10px;margin-top:4px">www.shopmarieshair.com</p>
+            </div>
+            </body></html>
+        `;
+        const printWindow = window.open('', '_blank', 'width=320,height=600');
+        if (printWindow) {
+            printWindow.document.write(receiptHtml);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => { printWindow.print(); printWindow.close(); }, 300);
+        }
+    };
+
     const resetCheckout = () => {
         setShowCheckoutModal(false);
         setCompletedOrder(null);
@@ -730,7 +786,7 @@ export default function POSPage() {
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4 w-full mt-4">
-                                    <button onClick={() => window.print()} className="py-3 px-4 border border-gray-300 rounded-xl font-semibold hover:bg-gray-50 transition-colors">
+                                    <button onClick={handlePrintReceipt} className="py-3 px-4 border border-gray-300 rounded-xl font-semibold hover:bg-gray-50 transition-colors">
                                         <i className="ri-printer-line mr-2"></i>
                                         Print Receipt
                                     </button>

@@ -65,6 +65,11 @@ export default function AdminLayout({
       setUserRole(profile.role);
       setIsAuthenticated(true);
       setIsLoading(false);
+
+      if (profile.role === 'staff' && pathname === '/admin') {
+        router.replace('/admin/pos');
+        return;
+      }
     }
 
     checkAuth();
@@ -250,6 +255,17 @@ export default function AdminLayout({
     return true;
   });
 
+  const staffAllowedPrefixes = ['/admin/pos', '/admin/products', '/admin/orders'];
+  const isStaffBlocked = userRole === 'staff'
+    && pathname !== '/admin/login'
+    && !staffAllowedPrefixes.some(p => pathname.startsWith(p));
+
+  useEffect(() => {
+    if (isStaffBlocked && isAuthenticated) {
+      router.replace('/admin/pos');
+    }
+  }, [isStaffBlocked, isAuthenticated, router]);
+
   // Special layout for Login Page
   if (pathname === '/admin/login') {
     return <>{children}</>;
@@ -334,19 +350,21 @@ export default function AdminLayout({
               >
                 <i className={`${isSidebarOpen ? 'ri-menu-fold-line' : 'ri-menu-unfold-line'} text-xl`}></i>
               </button>
-              <Link
-                href="/admin/sales"
-                className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-lg text-sm font-semibold border transition-colors shrink-0 ${
-                  pathname === '/admin/sales'
-                    ? 'bg-stone-700 text-white border-stone-700'
-                    : 'bg-white text-stone-800 border-stone-200 hover:bg-stone-50'
-                }`}
-                title="Turn store-wide sale pricing on or off"
-              >
-                <i className="ri-price-tag-2-line text-lg" aria-hidden />
-                <span className="sm:hidden">Sale</span>
-                <span className="hidden sm:inline">Store-wide sale</span>
-              </Link>
+              {userRole === 'admin' && (
+                <Link
+                  href="/admin/sales"
+                  className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-lg text-sm font-semibold border transition-colors shrink-0 ${
+                    pathname === '/admin/sales'
+                      ? 'bg-stone-700 text-white border-stone-700'
+                      : 'bg-white text-stone-800 border-stone-200 hover:bg-stone-50'
+                  }`}
+                  title="Turn store-wide sale pricing on or off"
+                >
+                  <i className="ri-price-tag-2-line text-lg" aria-hidden />
+                  <span className="sm:hidden">Sale</span>
+                  <span className="hidden sm:inline">Store-wide sale</span>
+                </Link>
+              )}
             </div>
 
             <div className="flex items-center space-x-2 lg:space-x-4">

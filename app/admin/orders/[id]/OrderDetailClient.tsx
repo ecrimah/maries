@@ -26,30 +26,25 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   const [statusUpdating, setStatusUpdating] = useState(false);
 
   const handlePrint = () => {
-    window.print();
-  };
-
-  useEffect(() => {
-    const styleId = 'order-print-styles';
-    if (!document.getElementById(styleId)) {
-      const style = document.createElement('style');
-      style.id = styleId;
-      style.textContent = `
-        @media print {
-          html, body { margin: 0; padding: 0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .no-print, aside, nav, header, footer, [class*="sidebar"], [class*="Sidebar"] { display: none !important; }
-          .print-section { display: block !important; position: fixed; inset: 0; z-index: 99999; background: #fff; overflow: visible; padding: 0; margin: 0; width: 100%; }
-          .print-section * { color: #000 !important; }
+    const printContent = document.getElementById('order-print-section');
+    if (!printContent) return;
+    const printWindow = window.open('', '_blank', 'width=800,height=900');
+    if (printWindow) {
+      printWindow.document.write(`<html><head><title>Order ${order?.order_number || ''}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #000; padding: 20px; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { padding: 8px 6px; text-align: left; }
+          thead tr { border-bottom: 2px solid #999; }
+          tbody tr { border-bottom: 1px solid #ddd; }
           @page { size: A4; margin: 10mm; }
-        }
-      `;
-      document.head.appendChild(style);
+        </style></head><body>${printContent.innerHTML}</body></html>`);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => { printWindow.print(); printWindow.close(); }, 300);
     }
-    return () => {
-      const el = document.getElementById(styleId);
-      if (el) el.remove();
-    };
-  }, []);
+  };
 
   const fetchOrderDetails = useCallback(async () => {
     try {
@@ -283,10 +278,8 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Print styles injected via useEffect */}
-
-      {/* Printable Order Slip — hidden on screen, shown only when printing */}
-      <div className="print-section" style={{ display: 'none' }}>
+      {/* Printable Order Slip — hidden on screen, content read by handlePrint */}
+      <div id="order-print-section" className="hidden">
         <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif', fontSize: '14px', lineHeight: '1.5' }}>
           <div style={{ border: '2px solid #222', padding: '24px' }}>
             {/* Header */}
