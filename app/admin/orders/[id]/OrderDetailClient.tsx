@@ -29,13 +29,20 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
     window.print();
   };
 
-  // Inject print styles
   useEffect(() => {
     const styleId = 'order-print-styles';
     if (!document.getElementById(styleId)) {
       const style = document.createElement('style');
       style.id = styleId;
-      style.textContent = '@media print { body * { visibility: hidden; } .print-section, .print-section * { visibility: visible; } .print-section { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; } .no-print { display: none !important; } }';
+      style.textContent = `
+        @media print {
+          html, body { margin: 0; padding: 0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .no-print, aside, nav, header, footer, [class*="sidebar"], [class*="Sidebar"] { display: none !important; }
+          .print-section { display: block !important; position: fixed; inset: 0; z-index: 99999; background: #fff; overflow: visible; padding: 0; margin: 0; width: 100%; }
+          .print-section * { color: #000 !important; }
+          @page { size: A4; margin: 10mm; }
+        }
+      `;
       document.head.appendChild(style);
     }
     return () => {
@@ -278,74 +285,77 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
     <div className="min-h-screen bg-gray-50">
       {/* Print styles injected via useEffect */}
 
-      {/* Printable Order Slip */}
-      <div className="print-section hidden print:block bg-white p-8">
-        <div className="border-2 border-gray-800 p-6">
-          {/* Header */}
-          <div className="flex justify-between items-start border-b-2 border-gray-800 pb-4 mb-4">
-            <div>
-              <h1 className="text-2xl font-bold">Maries Hair</h1>
-              <p className="text-sm text-gray-600">Order Packing Slip</p>
+      {/* Printable Order Slip — hidden on screen, shown only when printing */}
+      <div className="print-section" style={{ display: 'none' }}>
+        <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif', fontSize: '14px', lineHeight: '1.5' }}>
+          <div style={{ border: '2px solid #222', padding: '24px' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #222', paddingBottom: '16px', marginBottom: '16px' }}>
+              <div>
+                <h1 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>Maries Hair</h1>
+                <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0' }}>Order Packing Slip</p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>{order?.order_number}</p>
+                <p style={{ fontSize: '12px', margin: '4px 0 0' }}>{order ? new Date(order.created_at).toLocaleDateString() : ''}</p>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="font-bold text-lg">{order?.order_number}</p>
-              <p className="text-sm">{order ? new Date(order.created_at).toLocaleDateString() : ''}</p>
-            </div>
-          </div>
 
-          {/* Ship To */}
-          <div className="mb-6">
-            <h2 className="font-bold text-lg mb-2 bg-gray-200 px-2 py-1">SHIP TO:</h2>
-            <div className="pl-2">
-              <p className="font-bold text-lg">{customerName}</p>
-              <p>{shippingAddress.phone || order?.phone}</p>
-              <p>{shippingAddress.address || shippingAddress.address_line1}</p>
-              <p>{shippingAddress.city}{(shippingAddress.region || shippingAddress.state) && `, ${shippingAddress.region || shippingAddress.state}`}</p>
+            {/* Ship To */}
+            <div style={{ marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: 'bold', background: '#e5e5e5', padding: '4px 8px', margin: '0 0 8px' }}>SHIP TO:</h2>
+              <div style={{ paddingLeft: '8px' }}>
+                <p style={{ fontWeight: 'bold', fontSize: '16px', margin: '0 0 4px' }}>{customerName}</p>
+                <p style={{ margin: '0 0 2px' }}>{shippingAddress.phone || order?.phone}</p>
+                <p style={{ margin: '0 0 2px' }}>{shippingAddress.address || shippingAddress.address_line1}</p>
+                <p style={{ margin: 0 }}>{shippingAddress.city}{(shippingAddress.region || shippingAddress.state) && `, ${shippingAddress.region || shippingAddress.state}`}</p>
+              </div>
             </div>
-          </div>
 
-          {/* Order Items */}
-          <div className="mb-6">
-            <h2 className="font-bold text-lg mb-2 bg-gray-200 px-2 py-1">ORDER ITEMS:</h2>
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-400">
-                  <th className="text-left py-2 px-2">Product</th>
-                  <th className="text-left py-2 px-2">Variant</th>
-                  <th className="text-center py-2 px-2">Qty</th>
-                  <th className="text-right py-2 px-2">Price</th>
-                </tr>
-              </thead>
-              <tbody>
-                {order?.order_items?.map((item: any) => (
-                  <tr key={item.id} className="border-b border-gray-200">
-                    <td className="py-2 px-2 font-medium">{item.product_name}</td>
-                    <td className="py-2 px-2 text-sm">{item.variant_name || '-'}</td>
-                    <td className="py-2 px-2 text-center font-bold">{item.quantity}</td>
-                    <td className="py-2 px-2 text-right">GH₵ {item.unit_price?.toFixed(2)}</td>
+            {/* Order Items */}
+            <div style={{ marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: 'bold', background: '#e5e5e5', padding: '4px 8px', margin: '0 0 8px' }}>ORDER ITEMS:</h2>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #999' }}>
+                    <th style={{ textAlign: 'left', padding: '8px 6px', fontWeight: 'bold' }}>Product</th>
+                    <th style={{ textAlign: 'left', padding: '8px 6px', fontWeight: 'bold' }}>Variant</th>
+                    <th style={{ textAlign: 'center', padding: '8px 6px', fontWeight: 'bold' }}>Qty</th>
+                    <th style={{ textAlign: 'right', padding: '8px 6px', fontWeight: 'bold' }}>Price</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Order Summary */}
-          <div className="flex justify-between mb-6">
-            <div>
-              <p><span className="font-semibold">Shipping Method:</span> {order?.shipping_method || 'Standard'}</p>
-              <p><span className="font-semibold">Payment:</span> {order?.payment_method} ({order?.payment_status})</p>
-              {trackingNumber && <p><span className="font-semibold">Tracking #:</span> {trackingNumber}</p>}
+                </thead>
+                <tbody>
+                  {order?.order_items?.map((item: any) => (
+                    <tr key={item.id} style={{ borderBottom: '1px solid #ddd' }}>
+                      <td style={{ padding: '8px 6px', fontWeight: 500 }}>{item.product_name}</td>
+                      <td style={{ padding: '8px 6px', fontSize: '13px' }}>{item.variant_name || '-'}</td>
+                      <td style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 'bold' }}>{item.quantity}</td>
+                      <td style={{ padding: '8px 6px', textAlign: 'right' }}>GH₵ {item.unit_price?.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div className="text-right">
-              <p>Subtotal: GH₵ {order?.subtotal?.toFixed(2)}</p>
-              <p>Shipping: GH₵ {order?.shipping_total?.toFixed(2)}</p>
-              <p className="font-bold text-lg border-t border-gray-400 pt-1 mt-1">Total: GH₵ {order?.total?.toFixed(2)}</p>
-            </div>
-          </div>
 
-          {/* Footer */}
-          <div className="border-t-2 border-gray-800 pt-4 text-center text-sm text-gray-600">
-            <p>Thank you for shopping with Maries Hair!</p>
+            {/* Order Summary */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <div>
+                <p style={{ margin: '0 0 4px' }}><strong>Shipping:</strong> {order?.shipping_method || 'Standard'}</p>
+                <p style={{ margin: '0 0 4px' }}><strong>Payment:</strong> {order?.payment_method} ({order?.payment_status})</p>
+                {trackingNumber && <p style={{ margin: 0 }}><strong>Tracking #:</strong> {trackingNumber}</p>}
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ margin: '0 0 4px' }}>Subtotal: GH₵ {order?.subtotal?.toFixed(2)}</p>
+                <p style={{ margin: '0 0 4px' }}>Shipping: GH₵ {order?.shipping_total?.toFixed(2)}</p>
+                <p style={{ fontWeight: 'bold', fontSize: '18px', borderTop: '2px solid #999', paddingTop: '6px', marginTop: '6px' }}>Total: GH₵ {order?.total?.toFixed(2)}</p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ borderTop: '2px solid #222', paddingTop: '12px', textAlign: 'center', fontSize: '13px', color: '#666' }}>
+              <p style={{ margin: 0 }}>Thank you for shopping with Maries Hair!</p>
+              <p style={{ margin: '4px 0 0', fontSize: '11px' }}>Kpakpo mankralo road 55, Mataheko | 0547742920</p>
+            </div>
           </div>
         </div>
       </div>
