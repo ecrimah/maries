@@ -148,7 +148,8 @@ export default function AdminLayout({
       title: 'Dashboard',
       icon: 'ri-dashboard-line',
       path: '/admin',
-      exact: true
+      exact: true,
+      roles: ['admin']
     },
     {
       title: 'Orders',
