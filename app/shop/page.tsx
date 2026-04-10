@@ -92,14 +92,22 @@ function ShopContent() {
               const categoryObj = categories.find((c: any) => c.slug === selectedCategory);
 
               if (categoryObj) {
-                const targetSlugs = [selectedCategory];
-                const childSlugs = (categories as any[])
+                const targetIds = [categoryObj.id];
+                const childIds = (categories as any[])
                   .filter((c: any) => c.parent_id === categoryObj.id)
-                  .map((c: any) => c.slug);
-                targetSlugs.push(...childSlugs);
-                query = query.in('categories.slug', targetSlugs);
+                  .map((c: any) => c.id);
+                targetIds.push(...childIds);
+                query = query.in('category_id', targetIds);
               } else {
-                query = query.eq('categories.slug', selectedCategory);
+                // Fallback: look up by slug via the categories relation
+                const { data: catLookup } = await supabase
+                  .from('categories')
+                  .select('id')
+                  .eq('slug', selectedCategory)
+                  .single();
+                if (catLookup) {
+                  query = query.eq('category_id', catLookup.id);
+                }
               }
             }
 
