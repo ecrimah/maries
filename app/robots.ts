@@ -1,8 +1,8 @@
 import { MetadataRoute } from 'next';
 
-export default function robots(): MetadataRoute.Robots {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://example.com';
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.shopmarieshair.com';
 
+export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       {
@@ -14,9 +14,17 @@ export default function robots(): MetadataRoute.Robots {
           '/checkout',
           '/cart',
           '/account/',
+          '/auth/',
+          '/pay/',
+          '/order-success',
+          '/order-tracking',
+          '/maintenance',
+          '/offline',
+          '/pwa-settings',
+          '/support/',
         ],
       },
     ],
-    sitemap: `${baseUrl}/sitemap.xml`,
+    sitemap: `${BASE_URL}/sitemap.xml`,
   };
 }
