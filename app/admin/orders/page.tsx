@@ -311,7 +311,6 @@ export default function AdminOrdersPage() {
     const customerEmail = getCustomerEmail(order).toLowerCase();
     const orderId = (order.order_number || order.id).toLowerCase();
 
-    // First filter by view tab (confirmed vs abandoned)
     const isConfirmed = order.payment_status === 'paid';
     const matchesViewTab = orderViewTab === 'confirmed' ? isConfirmed : !isConfirmed;
 
@@ -322,6 +321,9 @@ export default function AdminOrdersPage() {
     const matchesProduct = productFilter === 'all' || 
       order.order_items?.some((item: any) => item.product_name === productFilter);
     return matchesViewTab && matchesSearch && matchesStatus && matchesProduct;
+  }).sort((a, b) => {
+    if (sortBy === 'total') return (b.total || 0) - (a.total || 0);
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
   return (

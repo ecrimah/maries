@@ -11,6 +11,8 @@ import { StructuredData, generateProductSchema, generateBreadcrumbSchema } from 
 import { notFound } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useStorePricing } from '@/context/StorePricingContext';
+import { resolveProductPrice, resolveVariantPrice, getProductCardPricing } from '@/lib/pricing';
 
 // Map common color names to hex values for the swatch preview
 function colorNameToHex(name: string): string {
@@ -41,6 +43,7 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
   const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
 
   const { addToCart } = useCart();
+  const { salesActive, discountPercent } = useStorePricing();
 
   useEffect(() => {
     async function fetchProduct() {
@@ -136,11 +139,12 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
         if (productData.category_id) {
           const { data: related } = await cachedQuery<{ data: any; error: any }>(
             `related:${productData.category_id}:${productData.id}`,
-            (() => supabase
+            (async () => await supabase
               .from('products')
               .select('*, product_images(url, position), product_variants(id, name, price, quantity)')
               .eq('category_id', productData.category_id)
               .neq('id', productData.id)
+              .eq('status', 'active')
               .limit(4)) as any,
             5 * 60 * 1000
           );
@@ -164,7 +168,8 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
                 maxStock: effectiveStock || 50,
                 moq: p.moq || 1,
                 hasVariants,
-                minVariantPrice
+                minVariantPrice,
+                rawProduct: p
               };
             }));
           }
@@ -188,7 +193,35 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
   const needsColorSelection = hasColors && !selectedColor;
 
   // Determine the active price: variant price if selected, otherwise base price
-  const activePrice = selectedVariant?.price ?? product?.price ?? 0;
+  let activePrice = product?.price ?? 0;
+  let activeOriginalDisplay: number | null = null;
+
+  if (product) {
+    if (selectedVariant) {
+      const resolved = resolveVariantPrice({
+        salesActive,
+        productPrice: product.price,
+        productSalePrice: product.sale_price,
+        variantPrice: selectedVariant.price ?? product.price,
+        variantSalePrice: selectedVariant.sale_price,
+        compareAtPrice: product.compare_at_price,
+        discountPercent,
+      });
+      activePrice = resolved.effective;
+      activeOriginalDisplay = resolved.originalDisplay;
+    } else {
+      const resolved = resolveProductPrice({
+        salesActive,
+        price: product.price,
+        salePrice: product.sale_price,
+        compareAtPrice: product.compare_at_price,
+        discountPercent,
+      });
+      activePrice = resolved.effective;
+      activeOriginalDisplay = resolved.originalDisplay;
+    }
+  }
+
   const activeStock = selectedVariant ? (selectedVariant.stock ?? selectedVariant.quantity ?? product?.stockCount ?? 0) : (product?.stockCount ?? 0);
 
   const handleAddToCart = () => {
@@ -247,8 +280,15 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
     );
   }
 
-  const discount = product.compare_at_price ? Math.round((1 - activePrice / product.compare_at_price) * 100) : 0;
-  const minVariantPrice = hasVariants ? Math.min(...product.variants.map((v: any) => v.price || product.price)) : product.price;
+  let discount = 0;
+  if (activeOriginalDisplay && activeOriginalDisplay > activePrice) {
+    discount = Math.round((1 - activePrice / activeOriginalDisplay) * 100);
+  } else if (product.compare_at_price && product.compare_at_price > activePrice) {
+    discount = Math.round((1 - activePrice / product.compare_at_price) * 100);
+  }
+
+  const overallPricing = getProductCardPricing(product, salesActive, discountPercent);
+  const minVariantPrice = overallPricing.minVariantPrice ?? overallPricing.price;
 
   const productSchema = generateProductSchema({
     name: product.name,
@@ -263,11 +303,12 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
     category: product.category
   });
 
+  const siteUrl = 'https://www.shopmarieshair.com';
   const breadcrumbSchema = generateBreadcrumbSchema([
-    { name: 'Home', url: 'https://standardecom.com' },
-    { name: 'Shop', url: 'https://standardecom.com/shop' },
-    { name: product.category, url: `https://standardecom.com/shop?category=${product.category.toLowerCase().replace(/\s+/g, '-')}` },
-    { name: product.name, url: `https://standardecom.com/product/${slug}` }
+    { name: 'Home', url: siteUrl },
+    { name: 'Shop', url: `${siteUrl}/shop` },
+    { name: product.category, url: `${siteUrl}/shop?category=${product.category.toLowerCase().replace(/\s+/g, '-')}` },
+    { name: product.name, url: `${siteUrl}/product/${slug}` }
   ]);
 
   return (
@@ -368,8 +409,10 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
                   ) : (
                     <span className="text-3xl lg:text-4xl font-bold text-gray-900">GH₵{activePrice.toFixed(2)}</span>
                   )}
-                  {product.compare_at_price && product.compare_at_price > activePrice && (
-                    <span className="text-xl text-gray-400 line-through">GH₵{product.compare_at_price.toFixed(2)}</span>
+                  {(activeOriginalDisplay ?? (product.compare_at_price != null && product.compare_at_price > activePrice ? product.compare_at_price : null)) != null && (
+                    <span className="text-xl text-gray-400 line-through">
+                      GH₵{(activeOriginalDisplay ?? product.compare_at_price).toFixed(2)}
+                    </span>
                   )}
                 </div>
 
@@ -471,7 +514,15 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
                               >
                                 <span>{variant.name}</span>
                                 <span className={`text-xs mt-0.5 ${isSelected ? 'text-blue-600' : 'text-gray-500'}`}>
-                                  GH₵{(variant.price || product.price).toFixed(2)}
+                                  GH₵{resolveVariantPrice({
+                                    salesActive,
+                                    productPrice: product.price,
+                                    productSalePrice: product.sale_price,
+                                    variantPrice: variant.price ?? product.price,
+                                    variantSalePrice: variant.sale_price,
+                                    compareAtPrice: product.compare_at_price,
+                                    discountPercent,
+                                  }).effective.toFixed(2)}
                                 </span>
                               </button>
                             );
@@ -513,7 +564,15 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
                               >
                                 <span>{variant.name}</span>
                                 <span className={`text-xs mt-0.5 ${isSelected ? 'text-blue-600' : 'text-gray-500'}`}>
-                                  GH₵{(variant.price || product.price).toFixed(2)}
+                                  GH₵{resolveVariantPrice({
+                                    salesActive,
+                                    productPrice: product.price,
+                                    productSalePrice: product.sale_price,
+                                    variantPrice: variant.price ?? product.price,
+                                    variantSalePrice: variant.sale_price,
+                                    compareAtPrice: product.compare_at_price,
+                                    discountPercent,
+                                  }).effective.toFixed(2)}
                                 </span>
                               </button>
                             );
@@ -690,9 +749,19 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                {relatedProducts.map((p) => (
-                  <ProductCard key={p.id} {...p} />
-                ))}
+                {relatedProducts.map((p) => {
+                  const pricing = getProductCardPricing(p.rawProduct, salesActive, discountPercent);
+                  return (
+                    <ProductCard
+                      key={p.id}
+                      {...p}
+                      price={pricing.price}
+                      minVariantPrice={pricing.minVariantPrice}
+                      originalPrice={pricing.originalPrice}
+                      badge={pricing.saleBadge ? 'SALE' : undefined}
+                    />
+                  );
+                })}
               </div>
             </div>
           </section>
