@@ -217,6 +217,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     const [seoTitle, setSeoTitle] = useState(initialData?.seo_title || '');
     const [metaDescription, setMetaDescription] = useState(initialData?.seo_description || '');
     const [urlSlug, setUrlSlug] = useState(initialData?.slug || '');
+    const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
     const [keywords, setKeywords] = useState(initialData?.tags?.join(', ') || '');
 
     const tabs = [
@@ -241,12 +242,11 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         fetchCategories();
     }, [categoryId]);
 
-    // Auto-generate slug from name if not manually edited
     useEffect(() => {
-        if (!isEditMode && productName && !urlSlug) {
+        if (!slugManuallyEdited && productName) {
             setUrlSlug(productName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''));
         }
-    }, [productName, isEditMode, urlSlug]);
+    }, [productName, slugManuallyEdited]);
 
     // Auto-generate SKU for new products
     useEffect(() => {
@@ -1137,13 +1137,32 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     <input
                                         type="text"
                                         value={urlSlug}
-                                        onChange={(e) => setUrlSlug(e.target.value)}
+                                        onChange={(e) => {
+                                            const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+                                            setUrlSlug(val);
+                                            setSlugManuallyEdited(true);
+                                        }}
                                         autoCapitalize="none"
                                         autoCorrect="off"
                                         spellCheck={false}
                                         className="min-w-0 flex-1 px-4 py-3 border-2 border-gray-300 rounded-r-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
                                         placeholder="product-slug"
                                     />
+                                    {slugManuallyEdited && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSlugManuallyEdited(false);
+                                                if (productName) {
+                                                    setUrlSlug(productName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''));
+                                                }
+                                            }}
+                                            className="ml-2 px-3 py-3 text-sm text-stone-600 hover:text-stone-800 border-2 border-gray-300 rounded-lg hover:bg-gray-50 whitespace-nowrap"
+                                            title="Reset to auto-generated slug"
+                                        >
+                                            <i className="ri-refresh-line"></i>
+                                        </button>
+                                    )}
                                 </div>
                                 <p className="text-sm text-gray-500 mt-2">Use lowercase letters, numbers, and dashes.</p>
                             </div>

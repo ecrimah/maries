@@ -21,6 +21,7 @@ const OfflineIndicator = dynamic(() => import('@/components/OfflineIndicator'), 
 const NetworkStatusMonitor = dynamic(() => import('@/components/NetworkStatusMonitor'), { ssr: false });
 const UpdatePrompt = dynamic(() => import('@/components/UpdatePrompt'), { ssr: false });
 const LiveSalesNotification = dynamic(() => import('@/components/LiveSalesNotification'), { ssr: false });
+const MessengerChatButton = dynamic(() => import('@/components/MessengerChatButton'), { ssr: false });
 
 export default function StoreLayoutShell({
   children,
@@ -57,6 +58,7 @@ export default function StoreLayoutShell({
           <NetworkStatusMonitor />
           <UpdatePrompt />
           <LiveSalesNotification />
+          <MessengerChatButton />
         </div>
       </StorePricingProvider>
     </CMSProvider>

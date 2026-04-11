@@ -2,140 +2,50 @@
 
 import { useState, useEffect } from 'react';
 
+const WHATSAPP_NUMBER = '233547742920';
+const DEFAULT_MESSAGE = 'Hi! I have a question about your products.';
+
 export default function MessengerChatButton() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<Array<{ text: string; sender: 'user' | 'bot'; time: string }>>([
-    { text: 'Hi! Welcome to our store. How can I help you today?', sender: 'bot', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-  ]);
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
 
-  const quickReplies = [
-    { text: 'Track my order', icon: 'ri-truck-line' },
-    { text: 'Product inquiry', icon: 'ri-shopping-bag-line' },
-    { text: 'Return request', icon: 'ri-arrow-go-back-line' },
-    { text: 'Speak to agent', icon: 'ri-customer-service-2-line' }
-  ];
+  useEffect(() => {
+    setHasMounted(true);
+    const timer = setTimeout(() => setShowTooltip(true), 3000);
+    const hideTimer = setTimeout(() => setShowTooltip(false), 9000);
+    return () => { clearTimeout(timer); clearTimeout(hideTimer); };
+  }, []);
 
-  const handleSendMessage = () => {
-    if (!message.trim()) return;
+  if (!hasMounted) return null;
 
-    const newMessage = {
-      text: message,
-      sender: 'user' as const,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-
-    setMessages([...messages, newMessage]);
-    setMessage('');
-
-    setTimeout(() => {
-      const botReply = {
-        text: 'Thanks for your message! An agent will respond shortly. You can also check our Help Center for instant answers.',
-        sender: 'bot' as const,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setMessages(prev => [...prev, botReply]);
-    }, 1000);
-  };
-
-  const handleQuickReply = (text: string) => {
-    setMessage(text);
-  };
+  const waUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(DEFAULT_MESSAGE)}`;
 
   return (
-    <>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-stone-500 to-purple-600 text-white rounded-full shadow-2xl hover:scale-110 transition-transform z-50 flex items-center justify-center"
-      >
-        {isOpen ? (
-          <i className="ri-close-line text-2xl"></i>
-        ) : (
-          <i className="ri-messenger-fill text-2xl"></i>
-        )}
-      </button>
-
-      {isOpen && (
-        <div className="fixed bottom-24 right-6 w-96 h-[600px] bg-white rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden border border-gray-200">
-          <div className="bg-gradient-to-r from-stone-500 to-purple-600 text-white p-4">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="w-12 h-12 flex items-center justify-center bg-white text-purple-600 rounded-full font-bold text-xl">
-                  <i className="ri-customer-service-2-fill"></i>
-                </div>
-                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold">Customer Support</h3>
-                <p className="text-sm text-stone-100">Typically replies instantly</p>
-              </div>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="w-8 h-8 flex items-center justify-center hover:bg-white/20 rounded-full transition-colors"
-              >
-                <i className="ri-subtract-line text-xl"></i>
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-            {messages.map((msg, index) => (
-              <div
-                key={index}
-                className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div className={`max-w-[75%] ${msg.sender === 'user' ? 'order-2' : 'order-1'}`}>
-                  <div className={`px-4 py-2 rounded-2xl ${
-                    msg.sender === 'user'
-                      ? 'bg-stone-500 text-white rounded-br-sm'
-                      : 'bg-white text-gray-900 rounded-bl-sm shadow-sm'
-                  }`}>
-                    <p className="text-sm">{msg.text}</p>
-                  </div>
-                  <p className={`text-xs text-gray-500 mt-1 ${msg.sender === 'user' ? 'text-right' : 'text-left'}`}>
-                    {msg.time}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="border-t border-gray-200 p-3 bg-white">
-            <div className="flex flex-wrap gap-2 mb-3">
-              {quickReplies.map((reply, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleQuickReply(reply.text)}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full text-sm transition-colors"
-                >
-                  <i className={`${reply.icon} text-sm`}></i>
-                  <span>{reply.text}</span>
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button className="w-9 h-9 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
-                <i className="ri-add-line text-xl"></i>
-              </button>
-              <input
-                type="text"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                placeholder="Type a message..."
-                className="flex-1 px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-stone-500"
-              />
-              <button
-                onClick={handleSendMessage}
-                className="w-9 h-9 flex items-center justify-center bg-stone-500 hover:bg-stone-600 text-white rounded-full transition-colors"
-              >
-                <i className="ri-send-plane-fill"></i>
-              </button>
-            </div>
-          </div>
+    <div className="fixed bottom-6 right-6 z-50 flex items-end gap-3">
+      {showTooltip && (
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 px-4 py-3 max-w-[200px] animate-fade-in mb-2">
+          <button
+            onClick={() => setShowTooltip(false)}
+            className="absolute -top-2 -right-2 w-5 h-5 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center text-gray-600 text-xs"
+          >
+            ×
+          </button>
+          <p className="text-sm text-gray-800 font-medium">Need help?</p>
+          <p className="text-xs text-gray-500 mt-0.5">Chat with us on WhatsApp!</p>
         </div>
       )}
-    </>
+
+      <a
+        href={waUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Chat on WhatsApp"
+        className="w-[60px] h-[60px] bg-[#25D366] hover:bg-[#1fb855] text-white rounded-full shadow-2xl hover:scale-110 transition-all flex items-center justify-center"
+      >
+        <svg viewBox="0 0 32 32" width="32" height="32" fill="currentColor">
+          <path d="M16.004 2.667A13.26 13.26 0 002.74 15.93a13.15 13.15 0 001.81 6.64L2.667 29.333l7.013-1.84a13.27 13.27 0 006.324 1.614h.005A13.27 13.27 0 0029.333 15.93 13.26 13.26 0 0016.004 2.667zm0 24.273a11.01 11.01 0 01-5.613-1.537l-.403-.239-4.173 1.095 1.114-4.069-.263-.418A10.95 10.95 0 015 15.93a11.01 11.01 0 0111.004-11.004A11.01 11.01 0 0127.07 15.93a11.02 11.02 0 01-11.066 11.01zm6.037-8.242c-.33-.166-1.96-.968-2.264-1.078-.304-.112-.525-.166-.746.166-.222.33-.859 1.078-.053 1.298-.192.221-.746.33-1.43.651-.25.117-1.08.418-2.057-.398-.76-.677-1.274-1.514-1.423-1.77-.149-.257-.016-.396.112-.524.115-.115.256-.302.385-.452.128-.152.17-.26.256-.433.085-.173.043-.324-.022-.453-.064-.128-.746-1.798-1.022-2.462-.269-.647-.542-.559-.746-.57l-.636-.01c-.222 0-.581.083-.886.406-.304.324-1.162 1.136-1.162 2.77s1.19 3.213 1.355 3.434c.166.222 2.34 3.572 5.67 5.008.792.342 1.41.546 1.892.698.795.253 1.519.217 2.09.132.638-.095 1.96-.802 2.237-1.576.277-.774.277-1.438.194-1.576-.083-.139-.304-.222-.636-.387z" />
+        </svg>
+      </a>
+    </div>
   );
 }
