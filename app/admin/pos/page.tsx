@@ -16,6 +16,7 @@ interface Product {
     category: string;
     image: string;
     sku: string;
+    slug?: string;
 }
 
 interface CartItem extends Product {
@@ -29,12 +30,49 @@ interface Customer {
     phone?: string;
 }
 
+function categoryNameFromRow(categories: unknown): string {
+    if (!categories) return 'Uncategorized';
+    if (Array.isArray(categories)) return categories[0]?.name || 'Uncategorized';
+    return (categories as { name?: string }).name || 'Uncategorized';
+}
+
+/** Escape LIKE wildcards so user input doesn't break ilike patterns */
+function escapeIlike(s: string): string {
+    return s.replace(/[%_\\]/g, '\\$&');
+}
+
+function formatPosProduct(
+    p: any,
+    salesActive: boolean,
+    discountPercent: number
+): Product {
+    return {
+        id: p.id,
+        name: p.name,
+        price: resolveProductPrice({
+            salesActive,
+            price: p.price,
+            salePrice: p.sale_price,
+            compareAtPrice: p.compare_at_price,
+            discountPercent,
+        }).effective,
+        quantity: p.quantity,
+        category: categoryNameFromRow(p.categories),
+        image: p.product_images?.[0]?.url || 'https://via.placeholder.com/150',
+        sku: p.sku || '',
+        slug: p.slug || '',
+    };
+}
+
 export default function POSPage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
     const [cart, setCart] = useState<CartItem[]>([]);
     const [activeCategory, setActiveCategory] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<Product[] | null>(null);
+    const [searchingRemote, setSearchingRemote] = useState(false);
+    const [pricingState, setPricingState] = useState({ salesActive: false, discountPercent: 0 });
     const [loading, setLoading] = useState(true);
     const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
 
@@ -77,12 +115,13 @@ export default function POSPage() {
                 .select('value')
                 .eq('key', 'store_pricing')
                 .maybeSingle();
-            const salesActive = parseStorePricingValue(pricingRow?.value).sales_active;
+            const { sales_active: salesActive, discount_percent: discountPercent } = parseStorePricingValue(pricingRow?.value);
+            setPricingState({ salesActive, discountPercent });
 
             const { data: prodData } = await supabase
                 .from('products')
                 .select(`
-          id, name, price, sale_price, compare_at_price, quantity, sku,
+          id, name, slug, price, sale_price, compare_at_price, quantity, sku,
           categories(name),
           product_images(url)
         `)
@@ -91,20 +130,7 @@ export default function POSPage() {
                 .limit(1000);
 
             if (prodData) {
-                const formatted: Product[] = prodData.map((p: any) => ({
-                    id: p.id,
-                    name: p.name,
-                    price: resolveProductPrice({
-                        salesActive,
-                        price: p.price,
-                        salePrice: p.sale_price,
-                        compareAtPrice: p.compare_at_price,
-                    }).effective,
-                    quantity: p.quantity,
-                    category: p.categories?.name || 'Uncategorized',
-                    image: p.product_images?.[0]?.url || 'https://via.placeholder.com/150',
-                    sku: p.sku
-                }));
+                const formatted: Product[] = prodData.map((p: any) => formatPosProduct(p, salesActive, discountPercent));
                 setProducts(formatted);
 
                 // Extract Categories
@@ -159,17 +185,65 @@ export default function POSPage() {
 
     const emptyCart = () => setCart([]);
 
+    // Debounced server search (finds products beyond the initial 1000-row fetch)
+    useEffect(() => {
+        const q = searchQuery.trim().replace(/,/g, ' ');
+        if (q.length < 2) {
+            setSearchResults(null);
+            setSearchingRemote(false);
+            return;
+        }
+        const tick = setTimeout(async () => {
+            setSearchingRemote(true);
+            const { salesActive, discountPercent } = pricingState;
+            const escaped = escapeIlike(q);
+            const pattern = `%${escaped}%`;
+            const sel = `
+          id, name, slug, price, sale_price, compare_at_price, quantity, sku,
+          categories(name),
+          product_images(url)
+        `;
+            try {
+                const [byName, bySku, bySlug] = await Promise.all([
+                    supabase.from('products').select(sel).eq('status', 'active').ilike('name', pattern).limit(250),
+                    supabase.from('products').select(sel).eq('status', 'active').ilike('sku', pattern).limit(250),
+                    supabase.from('products').select(sel).eq('status', 'active').ilike('slug', pattern).limit(250),
+                ]);
+                const map = new Map<string, Product>();
+                for (const row of [...(byName.data || []), ...(bySku.data || []), ...(bySlug.data || [])]) {
+                    map.set(row.id, formatPosProduct(row, salesActive, discountPercent));
+                }
+                const merged = Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+                setSearchResults(merged.slice(0, 400));
+            } catch (e) {
+                console.error('POS search error:', e);
+                setSearchResults(null);
+            } finally {
+                setSearchingRemote(false);
+            }
+        }, 280);
+        return () => clearTimeout(tick);
+    }, [searchQuery, pricingState]);
+
     // Computed
     const filteredProducts = useMemo(() => {
-        return products.filter(p => {
-            const query = searchQuery.toLowerCase().trim();
-            const matchesSearch = !query || p.name.toLowerCase().includes(query) ||
-                p.sku?.toLowerCase().includes(query);
-            // When searching, ignore category filter so all matching products show
-            const matchesCat = query || activeCategory === 'All' || p.category === activeCategory;
-            return matchesSearch && matchesCat;
+        const q = searchQuery.toLowerCase().trim().replace(/,/g, ' ');
+        const useRemote = searchResults !== null && q.length >= 2;
+        const list = useRemote ? searchResults! : products;
+
+        const matchesTokens = (p: Product) => {
+            if (!q) return true;
+            if (useRemote) return true;
+            const hay = `${p.name} ${p.sku || ''} ${p.slug || ''}`.toLowerCase();
+            return q.split(/\s+/).filter(Boolean).every(t => t.length > 0 && hay.includes(t));
+        };
+
+        return list.filter(p => {
+            const matchesCat =
+                q.length > 0 || activeCategory === 'All' || p.category === activeCategory;
+            return matchesTokens(p) && matchesCat;
         });
-    }, [products, searchQuery, activeCategory]);
+    }, [products, searchResults, searchQuery, activeCategory]);
 
     // Filter customers by search
     const filteredCustomers = useMemo(() => {
@@ -259,9 +333,9 @@ export default function POSPage() {
                 .select('value')
                 .eq('key', 'store_pricing')
                 .maybeSingle();
-            const checkoutSalesActive = parseStorePricingValue(
+            const { sales_active: checkoutSalesActive, discount_percent: checkoutDiscountPercent } = parseStorePricingValue(
                 checkoutPricingRow?.value
-            ).sales_active;
+            );
             const { data: checkoutProducts, error: checkoutProductsError } =
                 await supabase
                     .from('products')
@@ -279,7 +353,7 @@ export default function POSPage() {
             for (const item of cart) {
                 const p = checkoutProductMap.get(item.id);
                 if (!p) throw new Error(`Product not found: ${item.name}`);
-                const unit = resolveCartLineUnitPrice(p, undefined, checkoutSalesActive);
+                const unit = resolveCartLineUnitPrice(p, undefined, checkoutSalesActive, checkoutDiscountPercent);
                 posSubtotal += unit * item.cartQuantity;
                 resolvedLines.push({ item, unit });
             }
@@ -565,17 +639,37 @@ ${paymentMethod === 'cash' && changeDue > 0 ? `
             <div className={`flex-1 flex flex-col h-full min-w-0 ${isMobileCartOpen ? 'hidden lg:flex' : 'flex'}`}>
                 {/* Header / Search */}
                 <div className="bg-white p-4 border-b border-gray-200 flex items-center justify-between space-x-4 shrink-0">
-                    <div className="relative flex-1 max-w-lg">
-                        <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    <form
+                        className="relative flex-1 max-w-lg"
+                        onSubmit={(e) => e.preventDefault()}
+                    >
+                        <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
                         <input
-                            type="text"
-                            placeholder="Search products..."
+                            type="search"
+                            enterKeyHint="search"
+                            placeholder="Search name, SKU, or slug…"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 text-sm"
+                            className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-500 text-sm"
+                            autoComplete="off"
                             autoFocus
                         />
-                    </div>
+                        {searchingRemote && (
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                                <i className="ri-loader-4-line animate-spin text-stone-600 text-lg"></i>
+                            </span>
+                        )}
+                        {!searchingRemote && searchQuery.trim().length > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => { setSearchQuery(''); setSearchResults(null); }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                                aria-label="Clear search"
+                            >
+                                <i className="ri-close-line text-lg"></i>
+                            </button>
+                        )}
+                    </form>
                     <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar">
                         {categories.map(cat => (
                             <button
@@ -623,7 +717,12 @@ ${paymentMethod === 'cash' && changeDue > 0 ? `
                                         <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 mb-auto">{product.name}</h3>
                                         <div className="flex items-center justify-between mt-2 pt-2">
                                             <span className="text-stone-700 font-bold">GH₵{product.price.toFixed(2)}</span>
-                                            <button className="w-8 h-8 rounded-full bg-stone-50 text-stone-700 flex items-center justify-center group-hover:bg-stone-700 group-hover:text-white transition-colors">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); addToCart(product); }}
+                                                className="w-8 h-8 rounded-full bg-stone-50 text-stone-700 flex items-center justify-center group-hover:bg-stone-700 group-hover:text-white transition-colors"
+                                                aria-label="Add to cart"
+                                            >
                                                 <i className="ri-add-line"></i>
                                             </button>
                                         </div>
